@@ -85,7 +85,7 @@ cd build
 
 # Configure with CMake
 echo "Configuring with CMake..."
-cmake ../cli
+cmake ..
 
 # Build
 echo ""
