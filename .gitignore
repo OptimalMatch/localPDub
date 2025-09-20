@@ -73,6 +73,7 @@ temp/
 # Build outputs
 dist/
 build/
+build-*/
 out/
 
 # Security - Never commit these
