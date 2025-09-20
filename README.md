@@ -145,11 +145,11 @@ LocalPDub uses the `.lpd` extension for encrypted vault files:
 
 ## Contributing
 
-This project is in early development. Contributions welcome!
+This project is in early development. Contributions are welcome! Please feel free to submit pull requests, report bugs, or suggest features.
 
 ## License
 
-[To be determined]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Disclaimer
 

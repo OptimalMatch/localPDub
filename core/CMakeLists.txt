@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
 project(localpdub_core VERSION 0.1.0 LANGUAGES CXX)
 
+# Project metadata
+set(PROJECT_DESCRIPTION "LocalPDub - Secure password manager core library")
+set(PROJECT_HOMEPAGE_URL "https://github.com/OptimalMatch/localPDub")
+set(PROJECT_LICENSE "MIT")
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
