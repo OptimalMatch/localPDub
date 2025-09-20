@@ -242,6 +242,33 @@ public:
         vault_path = path;
     }
 
+    bool reload_entries() {
+        if (!is_open) {
+            return false;
+        }
+
+        // Re-read vault file to get synced changes
+        try {
+            std::ifstream file(vault_path, std::ios::binary);
+            if (!file) {
+                return false;
+            }
+
+            std::vector<uint8_t> file_data((std::istreambuf_iterator<char>(file)),
+                                          std::istreambuf_iterator<char>());
+            file.close();
+
+            // Decrypt with current key
+            auto decrypted = crypto::decrypt_data(file_data, master_key);
+            vault_data = json::parse(decrypted);
+
+            return true;
+        } catch (const std::exception& e) {
+            std::cerr << "Failed to reload vault: " << e.what() << std::endl;
+            return false;
+        }
+    }
+
 private:
     bool save_vault(const std::vector<uint8_t>& salt) {
         // Update modified time

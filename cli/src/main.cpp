@@ -7,8 +7,15 @@
 #include <iomanip>
 #include <algorithm>
 #include <random>
+#include <thread>
+#include <chrono>
+#include <sstream>
+#include <mutex>
+#include <atomic>
 #include "../../core/src/storage/vault_storage.cpp"
 #include "../../core/src/crypto/crypto.cpp"
+#include "../../core/src/sync/network_discovery.cpp"
+#include "../../core/src/sync/sync_manager.cpp"
 
 using namespace localpdub;
 using json = nlohmann::json;
@@ -51,8 +58,9 @@ private:
             std::cout << "5. Edit entry\n";
             std::cout << "6. Delete entry\n";
             std::cout << "7. Generate password\n";
-            std::cout << "8. Save and exit\n";
-            std::cout << "9. Exit without saving\n";
+            std::cout << "8. Sync with other devices\n";
+            std::cout << "9. Save and exit\n";
+            std::cout << "0. Exit without saving\n";
             std::cout << "\nChoice: ";
 
             int choice;
@@ -67,8 +75,9 @@ private:
                 case 5: edit_entry(); break;
                 case 6: delete_entry(); break;
                 case 7: generate_password_menu(); break;
-                case 8: save_and_exit(); break;
-                case 9: exit_without_saving(); break;
+                case 8: sync_with_devices(); break;
+                case 9: save_and_exit(); break;
+                case 0: exit_without_saving(); break;
                 default: std::cout << "Invalid choice. Try again.\n";
             }
         }
@@ -418,6 +427,197 @@ private:
         }
 
         return password;
+    }
+
+    void sync_with_devices() {
+        std::cout << "\n═══ Sync with Other Devices ═══\n\n";
+
+        // Get device name
+        char hostname[256];
+        gethostname(hostname, sizeof(hostname));
+        std::string device_name(hostname);
+
+        // Get vault ID (use vault path as ID for now)
+        std::string home = std::getenv("HOME");
+        std::filesystem::path vault_path = std::filesystem::path(home) / ".localpdub" / "vault.lpd";
+        std::string vault_id = vault_path.string();
+
+        // Start discovery
+        std::cout << "Starting device discovery...\n";
+        std::cout << "This device will be visible to other LocalPDub clients on the network.\n\n";
+
+        sync::NetworkDiscoveryManager discovery;
+        discovery.set_timeout(std::chrono::seconds(60)); // 1 minute timeout
+
+        if (!discovery.start_session(device_name, vault_id)) {
+            std::cout << "❌ Failed to start discovery session.\n";
+            std::cout << "Make sure no other instance is running and ports 51820-51829 are available.\n";
+            return;
+        }
+
+        std::cout << "Searching for devices (60 seconds timeout)...\n";
+        std::cout << "Press Enter to stop searching and view found devices.\n\n";
+
+        // Wait for user input or timeout
+        std::atomic<bool> stop_requested(false);
+        std::thread input_thread([&stop_requested]() {
+            std::cin.get();
+            stop_requested = true;
+        });
+
+        // Show discovered devices as they appear
+        int last_count = 0;
+        auto start_time = std::chrono::steady_clock::now();
+        while (!stop_requested && discovery.is_active()) {
+            auto devices = discovery.get_discovered_devices();
+            if (devices.size() > last_count) {
+                std::cout << "✓ Found device: " << devices.back().name
+                         << " (" << devices.back().ip_address << ")\n";
+                last_count = devices.size();
+            }
+
+            // Check for 60 second timeout
+            auto elapsed = std::chrono::steady_clock::now() - start_time;
+            if (elapsed > std::chrono::seconds(60)) {
+                break;
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+
+        discovery.stop_session();
+
+        if (input_thread.joinable()) {
+            input_thread.join();
+        }
+
+        auto devices = discovery.get_discovered_devices();
+
+        if (devices.empty()) {
+            std::cout << "\nNo devices found.\n";
+            std::cout << "Make sure other devices are running sync mode.\n";
+            return;
+        }
+
+        // Display found devices
+        std::cout << "\n═══ Available Devices ═══\n\n";
+        for (size_t i = 0; i < devices.size(); ++i) {
+            std::cout << i + 1 << ". " << devices[i].name
+                     << " (" << devices[i].ip_address << ":" << devices[i].port << ")\n";
+
+            auto time_t = std::chrono::system_clock::to_time_t(devices[i].last_modified);
+            std::cout << "   Last modified: " << std::ctime(&time_t);
+        }
+
+        // Select devices to sync with
+        std::cout << "\nEnter device numbers to sync with (comma-separated) or 'all': ";
+        std::string selection;
+        std::getline(std::cin, selection);
+
+        std::vector<sync::Device> selected_devices;
+
+        if (selection == "all") {
+            selected_devices = devices;
+        } else {
+            std::istringstream iss(selection);
+            std::string num;
+            while (std::getline(iss, num, ',')) {
+                try {
+                    int index = std::stoi(num) - 1;
+                    if (index >= 0 && index < devices.size()) {
+                        selected_devices.push_back(devices[index]);
+                    }
+                } catch (...) {
+                    // Invalid number, skip
+                }
+            }
+        }
+
+        if (selected_devices.empty()) {
+            std::cout << "No devices selected.\n";
+            return;
+        }
+
+        // Choose sync strategy
+        std::cout << "\nConflict resolution strategy:\n";
+        std::cout << "1. Newest wins (default)\n";
+        std::cout << "2. Local wins\n";
+        std::cout << "3. Remote wins\n";
+        std::cout << "Choice (1-3): ";
+
+        int strategy_choice;
+        std::cin >> strategy_choice;
+        std::cin.ignore();
+
+        sync::SyncStrategy strategy = sync::SyncStrategy::NEWEST_WINS;
+        switch (strategy_choice) {
+            case 2: strategy = sync::SyncStrategy::LOCAL_WINS; break;
+            case 3: strategy = sync::SyncStrategy::REMOTE_WINS; break;
+            default: strategy = sync::SyncStrategy::NEWEST_WINS; break;
+        }
+
+        // Authentication
+        std::cout << "\nAuthentication method:\n";
+        std::cout << "1. None (trusted network)\n";
+        std::cout << "2. Passphrase\n";
+        std::cout << "Choice (1-2): ";
+
+        int auth_choice;
+        std::cin >> auth_choice;
+        std::cin.ignore();
+
+        sync::AuthMethod auth_method = sync::AuthMethod::NONE;
+        std::string passphrase;
+
+        if (auth_choice == 2) {
+            auth_method = sync::AuthMethod::PASSPHRASE;
+            std::cout << "Enter sync passphrase: ";
+            passphrase = read_password();
+            std::cout << "\n";
+        }
+
+        // Start sync server
+        sync::SyncManager sync_manager(vault_path.string());
+        sync_manager.set_passphrase(passphrase);
+
+        if (!sync_manager.start_sync_server(51820)) {
+            std::cout << "❌ Failed to start sync server.\n";
+            return;
+        }
+
+        // Perform sync
+        std::cout << "\n═══ Syncing ═══\n\n";
+
+        auto result = sync_manager.sync_with_devices(selected_devices, strategy, auth_method, passphrase);
+
+        // Stop server
+        sync_manager.stop_sync_server();
+
+        // Display results
+        std::cout << "\n═══ Sync Results ═══\n\n";
+
+        if (result.success) {
+            std::cout << "✓ Sync completed successfully!\n";
+        } else {
+            std::cout << "⚠ Sync completed with errors.\n";
+        }
+
+        std::cout << "  Entries sent: " << result.entries_sent << "\n";
+        std::cout << "  Entries received: " << result.entries_received << "\n";
+        std::cout << "  Conflicts resolved: " << result.conflicts_resolved << "\n";
+
+        if (!result.errors.empty()) {
+            std::cout << "\nErrors:\n";
+            for (const auto& error : result.errors) {
+                std::cout << "  • " << error << "\n";
+            }
+        }
+
+        // Reload vault to show synced entries
+        if (result.entries_received > 0) {
+            std::cout << "\nReloading vault to show synced entries...\n";
+            vault.reload_entries();
+        }
     }
 
     void save_and_exit() {
