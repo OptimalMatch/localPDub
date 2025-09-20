@@ -1,0 +1,72 @@
+#!/usr/bin/expect -f
+
+# LocalPDub CLI interaction script
+set timeout 5
+
+# Start the application
+spawn ./build/localpdub
+
+# Wait for password prompt and enter master password
+expect "Enter master password:"
+send "testtest123\r"
+
+# Wait for successful login
+expect "Vault opened successfully"
+
+# Wait for main menu
+expect "Choice:"
+
+# Let's add a test entry
+send "3\r"
+
+# Add entry details
+expect "Title:"
+send "Test Website\r"
+
+expect "Username:"
+send "testuser@example.com\r"
+
+expect "Password (leave empty to generate):"
+send "\r"  ;# Generate password
+
+expect "URL:"
+send "https://example.com\r"
+
+expect "Email (optional):"
+send "testuser@example.com\r"
+
+expect "Notes (optional):"
+send "This is a test entry\r"
+
+expect "Add custom fields? (y/n):"
+send "y\r"
+
+expect "Field name (or 'done' to finish):"
+send "API Key\r"
+
+expect "Field value:"
+send "test-api-key-123\r"
+
+expect "Field name (or 'done' to finish):"
+send "done\r"
+
+# Back at main menu, let's list entries
+expect "Choice:"
+send "1\r"
+
+# View the entry we just created
+expect "Choice:"
+send "4\r"
+
+expect "Enter entry number to view:"
+send "1\r"
+
+# Reveal password
+expect "Press 'r' to reveal"
+send "r\r"
+
+# Back to main menu and save
+expect "Choice:"
+send "8\r"
+
+expect eof
