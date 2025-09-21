@@ -137,6 +137,12 @@ private:
                      << ui::AnsiUI::blue("Y") << "nc with other devices\n";
 
             std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "["
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_CYAN) << "I"
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "]"
+                     << ui::AnsiUI::color(ui::ansi::RESET) << " Direct sync by "
+                     << ui::AnsiUI::cyan("I") << "P address\n";
+
+            std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "["
                      << ui::AnsiUI::color(ui::ansi::BRIGHT_GREEN) << "X"
                      << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "]"
                      << ui::AnsiUI::color(ui::ansi::RESET) << " Save and e"
@@ -166,7 +172,8 @@ private:
                 case 'D': case '6': delete_entry(); break;
                 case 'G': case '7': generate_password_menu(); break;
                 case 'Y': case '8': sync_with_devices(); break;
-                case 'X': case '9': save_and_exit(); break;
+                case 'I': case '9': direct_sync_by_ip(); break;
+                case 'X': save_and_exit(); break;
                 case 'Q': case '0': exit_without_saving(); break;
                 default:
                     std::cout << ui::AnsiUI::error("Invalid choice. Try again.") << "\n";
@@ -922,6 +929,148 @@ private:
         std::cout << "  Entries sent: " << result.entries_sent << "\n";
         std::cout << "  Entries received: " << result.entries_received << "\n";
         std::cout << "  Conflicts resolved: " << result.conflicts_resolved << "\n";
+
+        if (!result.errors.empty()) {
+            std::cout << "\nErrors:\n";
+            for (const auto& error : result.errors) {
+                std::cout << "  • " << error << "\n";
+            }
+        }
+
+        // Reload vault to show synced entries
+        if (result.entries_received > 0) {
+            std::cout << "\nReloading vault to show synced entries...\n";
+            vault.reload_entries();
+        }
+    }
+
+    void direct_sync_by_ip() {
+        std::cout << "\n" << ui::AnsiUI::color(ui::ansi::BRIGHT_CYAN);
+        std::cout << "═══ Direct Sync by IP Address ═══\n";
+        std::cout << ui::AnsiUI::color(ui::ansi::RESET) << "\n";
+
+        // Get IP address
+        std::cout << "Enter IP address or hostname: ";
+        std::string host;
+        std::getline(std::cin, host);
+
+        if (host.empty()) {
+            std::cout << ui::AnsiUI::error("No IP address entered. Cancelling.") << "\n";
+            return;
+        }
+
+        // Get port (with default)
+        std::cout << "Enter port [51820]: ";
+        std::string port_str;
+        std::getline(std::cin, port_str);
+        int port = port_str.empty() ? 51820 : std::stoi(port_str);
+
+        std::cout << "\n" << ui::AnsiUI::info("Connecting to " + host + ":" + std::to_string(port) + "...") << "\n";
+
+        // Create a Device struct for the target
+        sync::Device target_device;
+        target_device.name = "Direct-" + host;
+        target_device.ip_address = host;
+        target_device.port = port;
+        target_device.id = host + ":" + std::to_string(port);
+        target_device.vault_id = "direct-connect";
+
+        // Get sync strategy
+        std::cout << "\nConflict resolution strategy:\n";
+        std::cout << "1. Newest wins (default)\n";
+        std::cout << "2. Keep local\n";
+        std::cout << "3. Accept remote\n";
+        std::cout << "Choice [1-3, Enter=1]: ";
+
+        std::string strategy_input;
+        std::getline(std::cin, strategy_input);
+        int strategy_choice = 1;  // Default
+        if (!strategy_input.empty()) {
+            try {
+                strategy_choice = std::stoi(strategy_input);
+            } catch (...) {
+                strategy_choice = 1;
+            }
+        }
+
+        sync::SyncStrategy strategy = sync::SyncStrategy::NEWEST_WINS;
+        switch (strategy_choice) {
+            case 2: strategy = sync::SyncStrategy::LOCAL_WINS; break;
+            case 3: strategy = sync::SyncStrategy::REMOTE_WINS; break;
+            default: strategy = sync::SyncStrategy::NEWEST_WINS; break;
+        }
+
+        // Get authentication method
+        std::cout << "\nAuthentication method:\n";
+        std::cout << "1. None (trusted network)\n";
+        std::cout << "2. Passphrase\n";
+        std::cout << "Choice [1-2, Enter=1]: ";
+
+        std::string auth_input;
+        std::getline(std::cin, auth_input);
+        int auth_choice = 1;  // Default
+        if (!auth_input.empty()) {
+            try {
+                auth_choice = std::stoi(auth_input);
+            } catch (...) {
+                auth_choice = 1;
+            }
+        }
+
+        sync::AuthMethod auth_method = sync::AuthMethod::NONE;
+        std::string passphrase;
+
+        if (auth_choice == 2) {
+            auth_method = sync::AuthMethod::PASSPHRASE;
+            std::cout << "Enter sync passphrase: ";
+            std::getline(std::cin, passphrase);
+        }
+
+        // Get current vault entries
+        json vault_entries = vault.get_all_entries();
+
+        // Create sync manager and attempt connection
+        sync::SyncManager sync_manager(vault.get_vault_path());
+        sync_manager.set_vault_entries(vault_entries);
+
+        std::cout << "\n" << ui::AnsiUI::info("Attempting direct connection...") << "\n";
+
+        // Use sync_with_devices but with our single target device
+        std::vector<sync::Device> devices = { target_device };
+        auto result = sync_manager.sync_with_devices(devices, strategy, auth_method, passphrase);
+
+        // Update vault if sync was successful
+        if (result.success && (result.entries_received > 0 || result.entries_sent > 0)) {
+            json final_entries = sync_manager.get_vault_entries();
+            vault.set_all_entries(final_entries);
+            if (vault.save_vault()) {
+                std::cout << "\n✓ Vault updated with synced entries\n";
+            }
+        }
+
+        // Display results
+        std::cout << "\n═══ Direct Sync Results ═══\n\n";
+
+        if (result.success) {
+            std::cout << ui::AnsiUI::success("✓ Direct sync completed successfully!") << "\n";
+        } else {
+            if (result.errors.empty()) {
+                std::cout << ui::AnsiUI::error("✗ Failed to connect to " + host) << "\n";
+                std::cout << "\nPossible reasons:\n";
+                std::cout << "  • The remote device is not running LocalPDub\n";
+                std::cout << "  • The remote device is not in sync mode\n";
+                std::cout << "  • Firewall is blocking port " << port << "\n";
+                std::cout << "  • Incorrect IP address or port\n";
+            } else {
+                std::cout << ui::AnsiUI::error("⚠ Sync completed with errors.") << "\n";
+            }
+        }
+
+        if (result.entries_sent > 0 || result.entries_received > 0) {
+            std::cout << "  Entries sent: " << result.entries_sent << "\n";
+            std::cout << "  Entries received: " << result.entries_received << "\n";
+            std::cout << "  Conflicts resolved: " << result.conflicts_resolved << "\n";
+        }
 
         if (!result.errors.empty()) {
             std::cout << "\nErrors:\n";

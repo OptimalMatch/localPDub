@@ -242,6 +242,10 @@ public:
         vault_path = path;
     }
 
+    std::string get_vault_path() const {
+        return vault_path.string();
+    }
+
     bool set_all_entries(const json& new_entries) {
         if (!is_open) {
             return false;
