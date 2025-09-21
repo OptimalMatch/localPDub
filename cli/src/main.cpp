@@ -2,8 +2,10 @@
 #include <string>
 #include <vector>
 #include <set>
+#include <limits>
 #include <termios.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <nlohmann/json.hpp>
 #include <iomanip>
 #include <algorithm>
@@ -608,18 +610,26 @@ private:
         std::atomic<bool> stop_requested(false);
         std::atomic<bool> input_received(false);
 
-        // Start input thread
-        std::thread input_thread([&stop_requested, &input_received]() {
-            std::cin.get();
-            input_received = true;
-            stop_requested = true;
-        });
+        // Use a non-blocking approach for input checking
+        // Set stdin to non-blocking mode temporarily
+        int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
+        fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
 
         // Show discovered devices as they appear
         std::set<std::string> seen_devices;  // Track unique devices
         auto start_time = std::chrono::steady_clock::now();
 
         while (!stop_requested.load() && discovery.is_active()) {
+            // Check for user input (non-blocking)
+            char c;
+            if (read(STDIN_FILENO, &c, 1) > 0) {
+                if (c == '\n') {
+                    input_received = true;
+                    stop_requested = true;
+                    break;
+                }
+            }
+
             auto devices = discovery.get_discovered_devices();
 
             // Show new devices only
@@ -645,20 +655,15 @@ private:
         // Stop discovery first
         discovery.stop_session();
 
-        // Clean up input thread
-        if (!input_received.load()) {
-            // If input wasn't received yet, we need to unblock the thread
-            // by sending a newline to stdin (platform specific workaround)
-            std::cout << "\nDiscovery timeout reached.\n";
-        }
+        // Restore stdin to blocking mode
+        fcntl(STDIN_FILENO, F_SETFL, flags);
 
-        if (input_thread.joinable()) {
-            // Detach if still waiting for input to avoid deadlock
-            if (!input_received.load()) {
-                input_thread.detach();
-            } else {
-                input_thread.join();
-            }
+        // Clean up input state
+        if (!input_received.load()) {
+            std::cout << "\nDiscovery timeout reached.\n";
+            // Clear any pending input
+            std::cin.clear();
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         }
 
         auto devices = discovery.get_discovered_devices();

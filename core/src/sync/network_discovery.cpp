@@ -79,10 +79,7 @@ bool NetworkDiscoveryManager::start_session(const std::string& device_name, cons
 }
 
 void NetworkDiscoveryManager::stop_session() {
-    if (!active_) {
-        return;
-    }
-
+    // Set active to false to signal threads to stop
     active_ = false;
 
     // Close sockets
@@ -96,7 +93,7 @@ void NetworkDiscoveryManager::stop_session() {
         listener_socket_ = -1;
     }
 
-    // Wait for threads to finish
+    // Always wait for threads to finish, even if active was already false
     if (broadcast_thread_ && broadcast_thread_->joinable()) {
         broadcast_thread_->join();
     }
