@@ -132,7 +132,16 @@ void SyncManager::handle_sync_client(int client_socket) {
         }
         buffer[received] = '\0';
 
-        json request = json::parse(buffer);
+        // Find the end of the JSON object (newline delimiter)
+        std::string request_data(buffer);
+        size_t newline_pos = request_data.find('\n');
+        if (newline_pos == std::string::npos) {
+            // No newline found, use entire buffer
+            newline_pos = request_data.length();
+        }
+
+        std::string json_str = request_data.substr(0, newline_pos);
+        json request = json::parse(json_str);
 
         // Authenticate if required
         if (!passphrase_.empty()) {
@@ -159,7 +168,7 @@ void SyncManager::handle_sync_client(int client_socket) {
             });
         }
 
-        std::string digest_str = digest_msg.dump();
+        std::string digest_str = digest_msg.dump() + "\n";
         send(client_socket, digest_str.c_str(), digest_str.length(), 0);
 
         // Receive remote digest
@@ -189,7 +198,7 @@ void SyncManager::handle_sync_client(int client_socket) {
             {"entries", entries_to_send}
         };
 
-        std::string entries_str = entries_msg.dump();
+        std::string entries_str = entries_msg.dump() + "\n";
         send(client_socket, entries_str.c_str(), entries_str.length(), 0);
 
         // Receive entries from client
@@ -253,7 +262,7 @@ SyncResult SyncManager::sync_with_devices(
                 {"device_id", device.id},
                 {"vault_id", vault_path_}
             };
-            std::string request_str = request.dump();
+            std::string request_str = request.dump() + "\n";  // Add newline delimiter
             send(sock, request_str.c_str(), request_str.length(), 0);
 
             // Authenticate
@@ -283,7 +292,7 @@ SyncResult SyncManager::sync_with_devices(
                 });
             }
 
-            std::string digest_str = digest_msg.dump();
+            std::string digest_str = digest_msg.dump() + "\n";
             send(sock, digest_str.c_str(), digest_str.length(), 0);
 
             // Receive remote digest
