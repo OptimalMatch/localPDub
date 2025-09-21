@@ -98,17 +98,20 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Build ARM64 dependencies
+      run: |
+        echo "Building ARM64 dependencies from source..."
+        ./scripts/build-arm64-deps.sh
+
     - name: Create build directory
       run: mkdir -p build-arm64
 
     - name: Configure CMake for ARM64
       working-directory: build-arm64
       run: |
-        # For cross-compilation, we'll need to skip certain dependencies
-        # or build them from source. For now, let's try a simplified build
+        # Use the toolchain file with our custom-built dependencies
         cmake ../cli \
-          -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain-aarch64.cmake \
-          || echo "Note: ARM64 cross-compilation may require additional setup"
+          -DCMAKE_TOOLCHAIN_FILE=../deps/arm64/toolchain-arm64-with-deps.cmake
 
     - name: Build
       working-directory: build-arm64

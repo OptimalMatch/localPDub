@@ -89,4 +89,4 @@ secrets/
 # LocalPDub specific
 ~/.localpdub/
 backups/
-exports/
+exports/deps/

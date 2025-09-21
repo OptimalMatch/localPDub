@@ -94,7 +94,29 @@ main() {
 
     # Check for ARM64 cross-compiler
     if command -v aarch64-linux-gnu-gcc &> /dev/null; then
-        build_arch "arm64" "aarch64-linux-gnu" "aarch64" "localpdub-linux-arm64"
+        # Build dependencies if not already built
+        if [ ! -d "deps/arm64/lib" ]; then
+            echo -e "${YELLOW}Building ARM64 dependencies first...${NC}"
+            ./scripts/build-arm64-deps.sh
+        fi
+
+        # Build ARM64 using our custom toolchain
+        echo -e "\n${YELLOW}Building for ARM64...${NC}"
+        rm -rf build-arm64
+        mkdir -p build-arm64
+        cd build-arm64
+
+        cmake ../cli -DCMAKE_TOOLCHAIN_FILE=../deps/arm64/toolchain-arm64-with-deps.cmake
+        make -j$(nproc)
+
+        aarch64-linux-gnu-strip localpdub-linux-arm64
+        mkdir -p ../release
+        cp localpdub-linux-arm64 ../release/
+        cd ../release
+        tar -czf localpdub-linux-arm64.tar.gz localpdub-linux-arm64
+        sha256sum localpdub-linux-arm64.tar.gz > localpdub-linux-arm64.tar.gz.sha256
+        cd ..
+        echo -e "${GREEN}✓ Built localpdub-linux-arm64${NC}"
     else
         echo -e "${YELLOW}Skipping ARM64 build (install with: sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu)${NC}"
     fi
