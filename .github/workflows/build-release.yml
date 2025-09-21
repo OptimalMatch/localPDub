@@ -14,6 +14,7 @@ on:
 jobs:
   build-linux-x86_64:
     runs-on: pop-os-1
+    name: Build Linux x86_64
 
     steps:
     - name: Install dependencies
@@ -67,8 +68,79 @@ jobs:
           release/localpdub-linux-x86_64.tar.gz
           release/localpdub-linux-x86_64.tar.gz.sha256
 
+  build-linux-arm64:
+    runs-on: pop-os-1
+    name: Build Linux ARM64 (Cross-compile)
+
+    steps:
+    - name: Install cross-compilation dependencies
+      run: |
+        # Continue on repository errors
+        sudo apt-get update || true
+
+        # Install ARM64 cross-compilation toolchain
+        sudo apt-get install -y \
+          gcc-aarch64-linux-gnu \
+          g++-aarch64-linux-gnu \
+          cmake \
+          git \
+          pkg-config \
+          ca-certificates
+
+        # Install ARM64 libraries for cross-compilation
+        sudo dpkg --add-architecture arm64
+        sudo apt-get update || true
+        sudo apt-get install -y \
+          libssl-dev:arm64 \
+          libargon2-dev:arm64 \
+          nlohmann-json3-dev
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Create build directory
+      run: mkdir -p build-arm64
+
+    - name: Configure CMake for ARM64
+      working-directory: build-arm64
+      run: |
+        cmake ../cli \
+          -DCMAKE_SYSTEM_NAME=Linux \
+          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+          -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+          -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+          -DCMAKE_FIND_ROOT_PATH=/usr/aarch64-linux-gnu \
+          -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+          -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+          -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
+
+    - name: Build
+      working-directory: build-arm64
+      run: make -j$(nproc)
+
+    - name: Strip binary
+      working-directory: build-arm64
+      run: aarch64-linux-gnu-strip localpdub-linux-arm64
+
+    - name: Package binary
+      run: |
+        mkdir -p release
+        cp build-arm64/localpdub-linux-arm64 release/
+        cd release
+        tar -czf localpdub-linux-arm64.tar.gz localpdub-linux-arm64
+        sha256sum localpdub-linux-arm64.tar.gz > localpdub-linux-arm64.tar.gz.sha256
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: localpdub-linux-arm64
+        path: |
+          release/localpdub-linux-arm64
+          release/localpdub-linux-arm64.tar.gz
+          release/localpdub-linux-arm64.tar.gz.sha256
+
   create-release:
-    needs: build-linux-x86_64
+    needs: [build-linux-x86_64, build-linux-arm64]
     runs-on: pop-os-1
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     permissions:
@@ -85,10 +157,16 @@ jobs:
         sudo apt update || true
         sudo apt install gh -y
 
-    - name: Download artifacts
+    - name: Download x86_64 artifacts
       uses: actions/download-artifact@v4
       with:
         name: localpdub-linux-x86_64
+        path: release/
+
+    - name: Download ARM64 artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: localpdub-linux-arm64
         path: release/
 
     - name: Set release tag
@@ -118,21 +196,25 @@ jobs:
         ## Downloads
 
         ### Linux x86_64 (Debian/Ubuntu)
-        Download the appropriate file for your system:
         - `localpdub-linux-x86_64` - Standalone executable
         - `localpdub-linux-x86_64.tar.gz` - Compressed archive
+
+        ### Linux ARM64 (Raspberry Pi 4/5, ARM servers)
+        - `localpdub-linux-arm64` - Standalone executable
+        - `localpdub-linux-arm64.tar.gz` - Compressed archive
 
         ## Installation
 
         ```bash
-        # Download and extract
+        # For x86_64:
         tar -xzf localpdub-linux-x86_64.tar.gz
-
-        # Make executable
         chmod +x localpdub-linux-x86_64
-
-        # Optional: Move to PATH
         sudo mv localpdub-linux-x86_64 /usr/local/bin/localpdub
+
+        # For ARM64:
+        tar -xzf localpdub-linux-arm64.tar.gz
+        chmod +x localpdub-linux-arm64
+        sudo mv localpdub-linux-arm64 /usr/local/bin/localpdub
         ```
 
         ## Features
@@ -152,4 +234,7 @@ jobs:
           --notes-file release_notes.md \
           release/localpdub-linux-x86_64 \
           release/localpdub-linux-x86_64.tar.gz \
-          release/localpdub-linux-x86_64.tar.gz.sha256
+          release/localpdub-linux-x86_64.tar.gz.sha256 \
+          release/localpdub-linux-arm64 \
+          release/localpdub-linux-arm64.tar.gz \
+          release/localpdub-linux-arm64.tar.gz.sha256
