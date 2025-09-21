@@ -44,7 +44,27 @@ set(OUTPUT_NAME "localpdub-${PLATFORM}-${ARCH_FULL}")
 
 # Find required packages
 find_package(OpenSSL REQUIRED)
-find_package(nlohmann_json REQUIRED)
+
+# Handle nlohmann_json
+if(CMAKE_CROSSCOMPILING)
+    # For cross-compilation, just add the include path
+    find_path(NLOHMANN_JSON_INCLUDE_DIR
+        NAMES nlohmann/json.hpp
+        PATHS ${CMAKE_PREFIX_PATH}/include
+              ${CMAKE_FIND_ROOT_PATH}/include
+    )
+    if(NLOHMANN_JSON_INCLUDE_DIR)
+        message(STATUS "Found nlohmann_json: ${NLOHMANN_JSON_INCLUDE_DIR}")
+        # Create an interface library for nlohmann_json
+        add_library(nlohmann_json INTERFACE)
+        target_include_directories(nlohmann_json INTERFACE ${NLOHMANN_JSON_INCLUDE_DIR})
+        add_library(nlohmann_json::nlohmann_json ALIAS nlohmann_json)
+    else()
+        message(FATAL_ERROR "Could not find nlohmann_json headers")
+    endif()
+else()
+    find_package(nlohmann_json REQUIRED)
+endif()
 
 # For cross-compilation, handle Argon2 differently
 if(CMAKE_CROSSCOMPILING)
