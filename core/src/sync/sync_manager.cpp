@@ -272,32 +272,16 @@ void SyncManager::handle_sync_client(int client_socket) {
         }
         std::cout << "  Sent " << entries_to_send.size() << " entries to client" << std::endl;
 
-        // Receive entries from client
+        // Receive entries from client using proper multi-packet handling
         std::cout << "  Waiting for client entries..." << std::endl;
-        received = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
-        if (received > 0) {
-            std::cout << "  Received entries message (" << received << " bytes)" << std::endl;
-            buffer[received] = '\0';
+        auto client_entries = receive_entries(client_socket);
+        std::cout << "  Received " << client_entries.size() << " entries from client" << std::endl;
 
-            // Find the end of the JSON object (newline delimiter)
-            std::string entries_data(buffer, received);
-            size_t entries_newline = entries_data.find('\n');
-            if (entries_newline == std::string::npos) {
-                entries_newline = entries_data.length();
-            }
-
-            std::string entries_json_str = entries_data.substr(0, entries_newline);
-            json received_entries_msg = json::parse(entries_json_str);
-
-            if (received_entries_msg["type"] == "ENTRIES") {
-                // Apply received entries
-                auto received_entries = received_entries_msg["entries"].get<std::vector<json>>();
-                std::cout << "  Received " << received_entries.size() << " entries from client" << std::endl;
-                auto conflicts = apply_changes(received_entries, SyncStrategy::NEWEST_WINS);
-                std::cout << "  Applied changes (" << conflicts.size() << " conflicts resolved)" << std::endl;
-                std::cout << "✓ Sync server processing completed" << std::endl;
-            }
+        if (!client_entries.empty()) {
+            auto conflicts = apply_changes(client_entries, SyncStrategy::NEWEST_WINS);
+            std::cout << "  Applied changes (" << conflicts.size() << " conflicts resolved)" << std::endl;
         }
+        std::cout << "✓ Sync server processing completed" << std::endl;
 
     } catch (const std::exception& e) {
         std::cerr << "Error handling sync client: " << e.what() << std::endl;
