@@ -12,6 +12,7 @@
 #include <sstream>
 #include <mutex>
 #include <atomic>
+#include "../../core/include/ui/ansi_colors.h"
 #include "../../core/src/storage/vault_storage.cpp"
 #include "../../core/src/crypto/crypto.cpp"
 #include "../../core/src/sync/network_discovery.cpp"
@@ -27,10 +28,33 @@ private:
 
 public:
     void run() {
-        std::cout << "\n╔══════════════════════════════════════╗\n";
-        std::cout << "║  LocalPDub Password Manager v0.1.0   ║\n";
-        std::cout << "║  Secure, Local, Private              ║\n";
-        std::cout << "╚══════════════════════════════════════╝\n\n";
+        // Initialize ANSI colors
+        ui::AnsiUI::setColorsEnabled(ui::AnsiUI::supportsColor());
+
+        // Display colorful BBS-style welcome screen
+        std::cout << ui::AnsiUI::color(ui::ansi::CLEAR_SCREEN);
+        std::cout << "\n";
+
+        // Animated title with gradient effect
+        std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_CYAN);
+        std::cout << ui::box::DOUBLE_TOP_LEFT;
+        for (int i = 0; i < 42; ++i) std::cout << ui::box::DOUBLE_HORIZONTAL;
+        std::cout << ui::box::DOUBLE_TOP_RIGHT << "\n";
+
+        std::cout << ui::box::DOUBLE_VERTICAL;
+        std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << ui::AnsiUI::color(ui::ansi::BOLD);
+        std::cout << "  LocalPDub Password Manager v0.1.0     ";
+        std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_CYAN) << ui::box::DOUBLE_VERTICAL << "\n";
+
+        std::cout << ui::box::DOUBLE_VERTICAL;
+        std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_MAGENTA);
+        std::cout << "  " << ui::box::STAR << " Secure " << ui::box::STAR << " Local " << ui::box::STAR << " Private " << ui::box::STAR << "       ";
+        std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_CYAN) << ui::box::DOUBLE_VERTICAL << "\n";
+
+        std::cout << ui::box::DOUBLE_BOTTOM_LEFT;
+        for (int i = 0; i < 42; ++i) std::cout << ui::box::DOUBLE_HORIZONTAL;
+        std::cout << ui::box::DOUBLE_BOTTOM_RIGHT;
+        std::cout << ui::AnsiUI::color(ui::ansi::RESET) << "\n\n";
 
         // Check if vault exists
         std::string home = std::getenv("HOME");
@@ -50,18 +74,27 @@ public:
 private:
     void main_menu() {
         while (running) {
-            std::cout << "\n═══ Main Menu ═══\n";
-            std::cout << "1. List all entries\n";
-            std::cout << "2. Search entries\n";
-            std::cout << "3. Add new entry\n";
-            std::cout << "4. View entry details\n";
-            std::cout << "5. Edit entry\n";
-            std::cout << "6. Delete entry\n";
-            std::cout << "7. Generate password\n";
-            std::cout << "8. Sync with other devices\n";
-            std::cout << "9. Save and exit\n";
-            std::cout << "0. Exit without saving\n";
-            std::cout << "\nChoice: ";
+            std::cout << "\n";
+            std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_YELLOW);
+            std::cout << ui::box::DOUBLE_HORIZONTAL << ui::box::DOUBLE_HORIZONTAL << ui::box::DOUBLE_HORIZONTAL;
+            std::cout << " " << ui::AnsiUI::bold("Main Menu") << " ";
+            std::cout << ui::box::DOUBLE_HORIZONTAL << ui::box::DOUBLE_HORIZONTAL << ui::box::DOUBLE_HORIZONTAL;
+            std::cout << ui::AnsiUI::color(ui::ansi::RESET) << "\n\n";
+
+            std::cout << ui::AnsiUI::cyan("1") << ". List all entries\n";
+            std::cout << ui::AnsiUI::cyan("2") << ". Search entries\n";
+            std::cout << ui::AnsiUI::cyan("3") << ". " << ui::AnsiUI::green("Add new entry") << "\n";
+            std::cout << ui::AnsiUI::cyan("4") << ". View entry details\n";
+            std::cout << ui::AnsiUI::cyan("5") << ". " << ui::AnsiUI::yellow("Edit entry") << "\n";
+            std::cout << ui::AnsiUI::cyan("6") << ". " << ui::AnsiUI::red("Delete entry") << "\n";
+            std::cout << ui::AnsiUI::cyan("7") << ". " << ui::AnsiUI::magenta("Generate password") << "\n";
+            std::cout << ui::AnsiUI::cyan("8") << ". " << ui::AnsiUI::blue("Sync with other devices") << "\n";
+            std::cout << ui::AnsiUI::cyan("9") << ". " << ui::AnsiUI::green("Save and exit") << "\n";
+            std::cout << ui::AnsiUI::cyan("0") << ". " << ui::AnsiUI::yellow("Exit without saving") << "\n";
+
+            std::cout << "\n" << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE);
+            std::cout << ui::box::ARROW_RIGHT << " Choice: ";
+            std::cout << ui::AnsiUI::color(ui::ansi::RESET);
 
             int choice;
             std::cin >> choice;
@@ -92,19 +125,19 @@ private:
         std::cout << "\n";
 
         if (password != confirm) {
-            std::cout << "❌ Passwords do not match!\n";
+            std::cout << ui::AnsiUI::error("Passwords do not match!") << "\n";
             exit(1);
         }
 
         if (password.length() < 8) {
-            std::cout << "❌ Password must be at least 8 characters!\n";
+            std::cout << ui::AnsiUI::error("Password must be at least 8 characters!") << "\n";
             exit(1);
         }
 
         if (vault.create_vault(password)) {
-            std::cout << "✓ Vault created successfully!\n";
+            std::cout << ui::AnsiUI::success("Vault created successfully!") << "\n";
         } else {
-            std::cout << "❌ Failed to create vault!\n";
+            std::cout << ui::AnsiUI::error("Failed to create vault!") << "\n";
             exit(1);
         }
     }
@@ -115,9 +148,9 @@ private:
         std::cout << "\n";
 
         if (vault.open_vault(password)) {
-            std::cout << "✓ Vault opened successfully!\n";
+            std::cout << ui::AnsiUI::success("Vault opened successfully!") << "\n";
         } else {
-            std::cout << "❌ Invalid password or corrupted vault!\n";
+            std::cout << ui::AnsiUI::error("Invalid password or corrupted vault!") << "\n";
             exit(1);
         }
     }
@@ -233,7 +266,7 @@ private:
         entry["favorite"] = false;
 
         std::string id = vault.add_entry(entry);
-        std::cout << "\n✓ Entry added successfully with ID: " << id << "\n";
+        std::cout << "\n" << ui::AnsiUI::success("Entry added successfully with ID: " + id) << "\n";
     }
 
     void view_entry() {
@@ -245,7 +278,7 @@ private:
 
         auto entries = vault.get_all_entries();
         if (index < 1 || index > entries.size()) {
-            std::cout << "❌ Invalid entry number!\n";
+            std::cout << ui::AnsiUI::error("Invalid entry number!") << "\n";
             return;
         }
 
@@ -291,7 +324,7 @@ private:
 
         auto entries = vault.get_all_entries();
         if (index < 1 || index > entries.size()) {
-            std::cout << "❌ Invalid entry number!\n";
+            std::cout << ui::AnsiUI::error("Invalid entry number!") << "\n";
             return;
         }
 
@@ -337,7 +370,7 @@ private:
 
         auto entries = vault.get_all_entries();
         if (index < 1 || index > entries.size()) {
-            std::cout << "❌ Invalid entry number!\n";
+            std::cout << ui::AnsiUI::error("Invalid entry number!") << "\n";
             return;
         }
 
@@ -352,9 +385,9 @@ private:
 
         if (confirm == 'y' || confirm == 'Y') {
             if (vault.delete_entry(id)) {
-                std::cout << "✓ Entry deleted successfully!\n";
+                std::cout << ui::AnsiUI::success("Entry deleted successfully!") << "\n";
             } else {
-                std::cout << "❌ Failed to delete entry!\n";
+                std::cout << ui::AnsiUI::error("Failed to delete entry!") << "\n";
             }
         }
     }
@@ -622,9 +655,9 @@ private:
 
     void save_and_exit() {
         if (vault.save_vault()) {
-            std::cout << "✓ Vault saved successfully!\n";
+            std::cout << ui::AnsiUI::success("Vault saved successfully!") << "\n";
         } else {
-            std::cout << "❌ Failed to save vault!\n";
+            std::cout << ui::AnsiUI::error("Failed to save vault!") << "\n";
         }
         vault.close_vault();
         running = false;
