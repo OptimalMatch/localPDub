@@ -590,6 +590,26 @@ private:
         std::filesystem::path vault_path = std::filesystem::path(home) / ".localpdub" / "vault.lpd";
         std::string vault_id = vault_path.string();
 
+        // Start sync server first (so we can accept incoming connections during discovery)
+        sync::SyncManager sync_server(vault_path.string());
+        // Passphrase will be set later if authentication is chosen
+
+        if (!sync_server.start_sync_server(51820)) {
+            // Try fallback ports if primary port is in use
+            bool server_started = false;
+            for (int port = 51821; port <= 51829; port++) {
+                if (sync_server.start_sync_server(port)) {
+                    server_started = true;
+                    break;
+                }
+            }
+            if (!server_started) {
+                std::cout << "❌ Failed to start sync server on any port (51820-51829).\n";
+                std::cout << "Make sure ports are available.\n";
+                return;
+            }
+        }
+
         // Start discovery
         std::cout << "Starting device discovery...\n";
         std::cout << "This device will be visible to other LocalPDub clients on the network.\n\n";
@@ -600,6 +620,7 @@ private:
         if (!discovery.start_session(device_name, vault_id)) {
             std::cout << "❌ Failed to start discovery session.\n";
             std::cout << "Make sure no other instance is running and ports 51820-51829 are available.\n";
+            sync_server.stop_sync_server();
             return;
         }
 
@@ -671,6 +692,7 @@ private:
         if (devices.empty()) {
             std::cout << "\nNo devices found.\n";
             std::cout << "Make sure other devices are running sync mode.\n";
+            sync_server.stop_sync_server();
             return;
         }
 
@@ -710,6 +732,7 @@ private:
 
         if (selected_devices.empty()) {
             std::cout << "No devices selected.\n";
+            sync_server.stop_sync_server();
             return;
         }
 
@@ -751,22 +774,18 @@ private:
             std::cout << "\n";
         }
 
-        // Start sync server
-        sync::SyncManager sync_manager(vault_path.string());
-        sync_manager.set_passphrase(passphrase);
-
-        if (!sync_manager.start_sync_server(51820)) {
-            std::cout << "❌ Failed to start sync server.\n";
-            return;
-        }
-
-        // Perform sync
+        // Perform sync using the already-running server
         std::cout << "\n═══ Syncing ═══\n\n";
 
-        auto result = sync_manager.sync_with_devices(selected_devices, strategy, auth_method, passphrase);
+        // Update sync_server passphrase if authentication is used
+        if (auth_method == sync::AuthMethod::PASSPHRASE) {
+            sync_server.set_passphrase(passphrase);
+        }
+
+        auto result = sync_server.sync_with_devices(selected_devices, strategy, auth_method, passphrase);
 
         // Stop server
-        sync_manager.stop_sync_server();
+        sync_server.stop_sync_server();
 
         // Display results
         std::cout << "\n═══ Sync Results ═══\n\n";
