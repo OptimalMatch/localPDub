@@ -591,7 +591,10 @@ private:
         std::string vault_id = vault_path.string();
 
         // Start sync server first (so we can accept incoming connections during discovery)
+        // Pass the vault entries to sync manager so it can compute digests
+        auto vault_entries = vault.get_all_entries();
         sync::SyncManager sync_server(vault_path.string());
+        sync_server.set_vault_entries(vault_entries);
         // Passphrase will be set later if authentication is chosen
 
         int sync_server_port = 51820;

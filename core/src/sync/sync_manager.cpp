@@ -385,19 +385,12 @@ std::vector<EntryDigest> SyncManager::compute_vault_digest() {
     std::vector<EntryDigest> digest;
 
     try {
-        // Read vault file
-        std::ifstream file(vault_path_, std::ios::binary);
-        if (!file) {
+        // Use the vault entries that were set via set_vault_entries()
+        if (vault_entries_.empty()) {
             return digest;
         }
 
-        std::string content((std::istreambuf_iterator<char>(file)),
-                           std::istreambuf_iterator<char>());
-        file.close();
-
-        json vault_data = json::parse(content);
-
-        for (const auto& entry : vault_data["entries"]) {
+        for (const auto& entry : vault_entries_) {
             EntryDigest ed;
             ed.id = entry["id"];
 
@@ -435,17 +428,10 @@ std::vector<json> SyncManager::find_entries_to_send(
     std::vector<json> entries_to_send;
 
     try {
-        // Read vault file
-        std::ifstream file(vault_path_, std::ios::binary);
-        if (!file) {
+        // Use the vault entries that were set via set_vault_entries()
+        if (vault_entries_.empty()) {
             return entries_to_send;
         }
-
-        std::string content((std::istreambuf_iterator<char>(file)),
-                           std::istreambuf_iterator<char>());
-        file.close();
-
-        json vault_data = json::parse(content);
 
         for (const auto& local_entry : local) {
             // Check if entry exists in remote
@@ -466,7 +452,7 @@ std::vector<json> SyncManager::find_entries_to_send(
 
             if (should_send) {
                 // Find the full entry in vault data
-                for (const auto& entry : vault_data["entries"]) {
+                for (const auto& entry : vault_entries_) {
                     if (entry["id"] == local_entry.id) {
                         entries_to_send.push_back(entry);
                         break;
@@ -535,29 +521,22 @@ std::vector<std::string> SyncManager::apply_changes(
     std::vector<std::string> conflicts;
 
     try {
-        // Read current vault
-        std::ifstream file(vault_path_, std::ios::binary);
-        if (!file) {
-            return conflicts;
+        // Work with the vault entries in memory
+        if (vault_entries_.empty()) {
+            vault_entries_ = json::array();
         }
-
-        std::string content((std::istreambuf_iterator<char>(file)),
-                           std::istreambuf_iterator<char>());
-        file.close();
-
-        json vault_data = json::parse(content);
 
         for (const auto& remote_entry : entries) {
             std::string entry_id = remote_entry["id"];
 
             // Find local entry if exists
-            auto local_it = std::find_if(vault_data["entries"].begin(),
-                                        vault_data["entries"].end(),
+            auto local_it = std::find_if(vault_entries_.begin(),
+                                        vault_entries_.end(),
                 [&entry_id](const json& e) { return e["id"] == entry_id; });
 
-            if (local_it == vault_data["entries"].end()) {
+            if (local_it == vault_entries_.end()) {
                 // New entry, add it
-                vault_data["entries"].push_back(remote_entry);
+                vault_entries_.push_back(remote_entry);
             } else {
                 // Existing entry, check for conflict
                 json resolved = resolve_conflict(*local_it, remote_entry, strategy);
@@ -566,12 +545,8 @@ std::vector<std::string> SyncManager::apply_changes(
             }
         }
 
-        // Save updated vault
-        std::ofstream out_file(vault_path_, std::ios::binary);
-        if (out_file) {
-            out_file << vault_data.dump(2);
-            out_file.close();
-        }
+        // Note: The updated entries need to be saved back to the vault
+        // This should be handled by the caller using the vault's save methods
 
     } catch (const std::exception& e) {
         std::cerr << "Error applying changes: " << e.what() << std::endl;
@@ -606,6 +581,10 @@ json SyncManager::resolve_conflict(
 
 void SyncManager::set_passphrase(const std::string& passphrase) {
     passphrase_ = passphrase;
+}
+
+void SyncManager::set_vault_entries(const json& entries) {
+    vault_entries_ = entries;
 }
 
 std::vector<SyncResult> SyncManager::get_sync_history() const {

@@ -63,6 +63,12 @@ public:
     // Set authentication passphrase
     void set_passphrase(const std::string& passphrase);
 
+    // Set vault entries (for computing digest without needing to decrypt)
+    void set_vault_entries(const json& entries);
+
+    // Get updated vault entries after sync
+    json get_vault_entries() const { return vault_entries_; }
+
     // Get sync history
     std::vector<SyncResult> get_sync_history() const;
 
@@ -92,6 +98,7 @@ private:
     // State
     std::string vault_path_;
     std::string passphrase_;
+    json vault_entries_;  // Decrypted vault entries
     std::atomic<bool> server_running_;
     int server_socket_;
     std::unique_ptr<std::thread> server_thread_;
