@@ -43,6 +43,12 @@ bool NetworkDiscoveryManager::start_session(const std::string& device_name, cons
         return false; // Session already active
     }
 
+    // Clear any previously discovered devices from last session
+    {
+        std::lock_guard<std::mutex> lock(devices_mutex_);
+        discovered_devices_.clear();
+    }
+
     device_name_ = device_name;
     vault_id_ = vault_id;
     session_start_time_ = std::chrono::system_clock::now();
@@ -102,11 +108,8 @@ void NetworkDiscoveryManager::stop_session() {
         listener_thread_->join();
     }
 
-    // Clear discovered devices
-    {
-        std::lock_guard<std::mutex> lock(devices_mutex_);
-        discovered_devices_.clear();
-    }
+    // Don't clear discovered devices - we need them for sync!
+    // Devices will be cleared when starting a new session or when object is destroyed
 }
 
 bool NetworkDiscoveryManager::bind_to_port(int start_port, int end_port) {
