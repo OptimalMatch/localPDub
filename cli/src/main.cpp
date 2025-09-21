@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <set>
 #include <termios.h>
 #include <unistd.h>
 #include <nlohmann/json.hpp>
@@ -605,35 +606,59 @@ private:
 
         // Wait for user input or timeout
         std::atomic<bool> stop_requested(false);
-        std::thread input_thread([&stop_requested]() {
+        std::atomic<bool> input_received(false);
+
+        // Start input thread
+        std::thread input_thread([&stop_requested, &input_received]() {
             std::cin.get();
+            input_received = true;
             stop_requested = true;
         });
 
         // Show discovered devices as they appear
-        int last_count = 0;
+        std::set<std::string> seen_devices;  // Track unique devices
         auto start_time = std::chrono::steady_clock::now();
-        while (!stop_requested && discovery.is_active()) {
+
+        while (!stop_requested.load() && discovery.is_active()) {
             auto devices = discovery.get_discovered_devices();
-            if (devices.size() > last_count) {
-                std::cout << "✓ Found device: " << devices.back().name
-                         << " (" << devices.back().ip_address << ")\n";
-                last_count = devices.size();
+
+            // Show new devices only
+            for (const auto& device : devices) {
+                std::string device_key = device.id + ":" + device.ip_address;
+                if (seen_devices.find(device_key) == seen_devices.end()) {
+                    seen_devices.insert(device_key);
+                    std::cout << ui::AnsiUI::success("Found device: " + device.name +
+                                                    " (" + device.ip_address + ")") << "\n";
+                }
             }
 
             // Check for 60 second timeout
             auto elapsed = std::chrono::steady_clock::now() - start_time;
             if (elapsed > std::chrono::seconds(60)) {
+                stop_requested = true;
                 break;
             }
 
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
 
+        // Stop discovery first
         discovery.stop_session();
 
+        // Clean up input thread
+        if (!input_received.load()) {
+            // If input wasn't received yet, we need to unblock the thread
+            // by sending a newline to stdin (platform specific workaround)
+            std::cout << "\nDiscovery timeout reached.\n";
+        }
+
         if (input_thread.joinable()) {
-            input_thread.join();
+            // Detach if still waiting for input to avoid deadlock
+            if (!input_received.load()) {
+                input_thread.detach();
+            } else {
+                input_thread.join();
+            }
         }
 
         auto devices = discovery.get_discovered_devices();
