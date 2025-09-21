@@ -789,6 +789,9 @@ private:
             sync_server.set_passphrase(passphrase);
         }
 
+        // Make sure server has latest vault entries for the sync
+        sync_server.set_vault_entries(vault.get_all_entries());
+
         auto result = sync_server.sync_with_devices(selected_devices, strategy, auth_method, passphrase);
 
         // Stop server
