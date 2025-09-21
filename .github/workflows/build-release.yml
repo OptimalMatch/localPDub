@@ -49,24 +49,24 @@ jobs:
 
     - name: Strip binary
       working-directory: build
-      run: strip localpdub-linux-x86_64
+      run: strip cli-localpdub-linux-x86_64
 
     - name: Package binary
       run: |
         mkdir -p release
-        cp build/localpdub-linux-x86_64 release/
+        cp build/cli-localpdub-linux-x86_64 release/
         cd release
-        tar -czf localpdub-linux-x86_64.tar.gz localpdub-linux-x86_64
-        sha256sum localpdub-linux-x86_64.tar.gz > localpdub-linux-x86_64.tar.gz.sha256
+        tar -czf cli-localpdub-linux-x86_64.tar.gz cli-localpdub-linux-x86_64
+        sha256sum cli-localpdub-linux-x86_64.tar.gz > cli-localpdub-linux-x86_64.tar.gz.sha256
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: localpdub-linux-x86_64
+        name: cli-localpdub-linux-x86_64
         path: |
-          release/localpdub-linux-x86_64
-          release/localpdub-linux-x86_64.tar.gz
-          release/localpdub-linux-x86_64.tar.gz.sha256
+          release/cli-localpdub-linux-x86_64
+          release/cli-localpdub-linux-x86_64.tar.gz
+          release/cli-localpdub-linux-x86_64.tar.gz.sha256
 
   # ARM64 build is currently disabled due to cross-compilation complexity
   # To enable: install ARM64 libraries or use static linking
@@ -119,24 +119,24 @@ jobs:
 
     - name: Strip binary
       working-directory: build-arm64
-      run: aarch64-linux-gnu-strip localpdub-linux-arm64
+      run: aarch64-linux-gnu-strip cli-localpdub-linux-arm64
 
     - name: Package binary
       run: |
         mkdir -p release
-        cp build-arm64/localpdub-linux-arm64 release/
+        cp build-arm64/cli-localpdub-linux-arm64 release/
         cd release
-        tar -czf localpdub-linux-arm64.tar.gz localpdub-linux-arm64
-        sha256sum localpdub-linux-arm64.tar.gz > localpdub-linux-arm64.tar.gz.sha256
+        tar -czf cli-localpdub-linux-arm64.tar.gz cli-localpdub-linux-arm64
+        sha256sum cli-localpdub-linux-arm64.tar.gz > cli-localpdub-linux-arm64.tar.gz.sha256
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: localpdub-linux-arm64
+        name: cli-localpdub-linux-arm64
         path: |
-          release/localpdub-linux-arm64
-          release/localpdub-linux-arm64.tar.gz
-          release/localpdub-linux-arm64.tar.gz.sha256
+          release/cli-localpdub-linux-arm64
+          release/cli-localpdub-linux-arm64.tar.gz
+          release/cli-localpdub-linux-arm64.tar.gz.sha256
 
   create-release:
     needs: [build-linux-x86_64, build-linux-arm64]
@@ -159,13 +159,13 @@ jobs:
     - name: Download x86_64 artifacts
       uses: actions/download-artifact@v4
       with:
-        name: localpdub-linux-x86_64
+        name: cli-localpdub-linux-x86_64
         path: release/
 
     - name: Download ARM64 artifacts
       uses: actions/download-artifact@v4
       with:
-        name: localpdub-linux-arm64
+        name: cli-localpdub-linux-arm64
         path: release/
       continue-on-error: true
 
@@ -196,25 +196,25 @@ jobs:
         ## Downloads
 
         ### Linux x86_64 (Debian/Ubuntu)
-        - `localpdub-linux-x86_64` - Standalone executable
-        - `localpdub-linux-x86_64.tar.gz` - Compressed archive
+        - `cli-localpdub-linux-x86_64` - Standalone executable
+        - `cli-localpdub-linux-x86_64.tar.gz` - Compressed archive
 
         ### Linux ARM64 (Raspberry Pi 4/5, ARM servers)
-        - `localpdub-linux-arm64` - Standalone executable
-        - `localpdub-linux-arm64.tar.gz` - Compressed archive
+        - `cli-localpdub-linux-arm64` - Standalone executable
+        - `cli-localpdub-linux-arm64.tar.gz` - Compressed archive
 
         ## Installation
 
         ```bash
         # For x86_64:
-        tar -xzf localpdub-linux-x86_64.tar.gz
-        chmod +x localpdub-linux-x86_64
-        sudo mv localpdub-linux-x86_64 /usr/local/bin/localpdub
+        tar -xzf cli-localpdub-linux-x86_64.tar.gz
+        chmod +x cli-localpdub-linux-x86_64
+        sudo mv cli-localpdub-linux-x86_64 /usr/local/bin/localpdub
 
         # For ARM64:
-        tar -xzf localpdub-linux-arm64.tar.gz
-        chmod +x localpdub-linux-arm64
-        sudo mv localpdub-linux-arm64 /usr/local/bin/localpdub
+        tar -xzf cli-localpdub-linux-arm64.tar.gz
+        chmod +x cli-localpdub-linux-arm64
+        sudo mv cli-localpdub-linux-arm64 /usr/local/bin/localpdub
         ```
 
         ## Features
@@ -230,11 +230,11 @@ jobs:
 
         # Create the release and upload assets
         # Build file list - always include x86_64
-        FILES="release/localpdub-linux-x86_64 release/localpdub-linux-x86_64.tar.gz release/localpdub-linux-x86_64.tar.gz.sha256"
+        FILES="release/cli-localpdub-linux-x86_64 release/cli-localpdub-linux-x86_64.tar.gz release/cli-localpdub-linux-x86_64.tar.gz.sha256"
 
         # Add ARM64 files if they exist
-        if [ -f "release/localpdub-linux-arm64" ]; then
-          FILES="$FILES release/localpdub-linux-arm64 release/localpdub-linux-arm64.tar.gz release/localpdub-linux-arm64.tar.gz.sha256"
+        if [ -f "release/cli-localpdub-linux-arm64" ]; then
+          FILES="$FILES release/cli-localpdub-linux-arm64 release/cli-localpdub-linux-arm64.tar.gz release/cli-localpdub-linux-arm64.tar.gz.sha256"
         fi
 
         gh release create "${{ steps.set_tag.outputs.tag }}" \

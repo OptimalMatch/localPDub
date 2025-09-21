@@ -40,7 +40,7 @@ else()
 endif()
 
 # Set output name with architecture
-set(OUTPUT_NAME "localpdub-${PLATFORM}-${ARCH_FULL}")
+set(OUTPUT_NAME "cli-localpdub-${PLATFORM}-${ARCH_FULL}")
 
 # Find required packages
 find_package(OpenSSL REQUIRED)
