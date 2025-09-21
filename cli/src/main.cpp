@@ -151,10 +151,8 @@ private:
             std::cout << ui::box::ARROW_RIGHT << " Choice: ";
             std::cout << ui::AnsiUI::color(ui::ansi::RESET);
 
-            // Get single character input
-            char choice;
-            std::cin >> choice;
-            std::cin.ignore();
+            // Get single character input without requiring Enter
+            char choice = read_single_char();
 
             // Convert to uppercase for case-insensitive matching
             choice = std::toupper(choice);
@@ -813,11 +811,19 @@ private:
         std::cout << "1. Newest wins (default)\n";
         std::cout << "2. Local wins\n";
         std::cout << "3. Remote wins\n";
-        std::cout << "Choice (1-3): ";
+        std::cout << "Choice [1-3, Enter=1]: ";
 
-        int strategy_choice;
-        std::cin >> strategy_choice;
-        std::cin.ignore();
+        std::string strategy_input;
+        std::getline(std::cin, strategy_input);
+
+        int strategy_choice = 1;  // Default
+        if (!strategy_input.empty()) {
+            try {
+                strategy_choice = std::stoi(strategy_input);
+            } catch (...) {
+                strategy_choice = 1;  // Default on invalid input
+            }
+        }
 
         sync::SyncStrategy strategy = sync::SyncStrategy::NEWEST_WINS;
         switch (strategy_choice) {
@@ -830,11 +836,19 @@ private:
         std::cout << "\nAuthentication method:\n";
         std::cout << "1. None (trusted network)\n";
         std::cout << "2. Passphrase\n";
-        std::cout << "Choice (1-2): ";
+        std::cout << "Choice [1-2, Enter=1]: ";
 
-        int auth_choice;
-        std::cin >> auth_choice;
-        std::cin.ignore();
+        std::string auth_input;
+        std::getline(std::cin, auth_input);
+
+        int auth_choice = 1;  // Default
+        if (!auth_input.empty()) {
+            try {
+                auth_choice = std::stoi(auth_input);
+            } catch (...) {
+                auth_choice = 1;  // Default on invalid input
+            }
+        }
 
         sync::AuthMethod auth_method = sync::AuthMethod::NONE;
         std::string passphrase;
@@ -947,6 +961,24 @@ private:
             vault.close_vault();
             running = false;
         }
+    }
+
+    char read_single_char() {
+        termios oldt;
+        tcgetattr(STDIN_FILENO, &oldt);
+        termios newt = oldt;
+        newt.c_lflag &= ~(ICANON | ECHO);  // Disable canonical mode and echo
+        tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+
+        char c;
+        c = getchar();
+
+        tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+
+        // Echo the character so user sees what they typed
+        std::cout << c << std::endl;
+
+        return c;
     }
 
     std::string read_password() {
