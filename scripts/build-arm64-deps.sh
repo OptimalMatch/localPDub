@@ -41,11 +41,17 @@ build_openssl() {
     tar -xzf openssl-1.1.1w.tar.gz
     cd openssl-1.1.1w
 
+    # Don't set CC/CXX for OpenSSL, just use cross-compile-prefix
+    unset CC CXX
     ./Configure linux-aarch64 \
         --prefix="$PREFIX" \
         --cross-compile-prefix=aarch64-linux-gnu- \
         no-shared \
         no-tests
+
+    # Restore CC/CXX for other builds
+    export CC=aarch64-linux-gnu-gcc
+    export CXX=aarch64-linux-gnu-g++
 
     make -j$(nproc)
     make install_sw
