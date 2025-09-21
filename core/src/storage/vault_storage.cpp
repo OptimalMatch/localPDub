@@ -268,12 +268,26 @@ public:
                 return false;
             }
 
-            std::vector<uint8_t> file_data((std::istreambuf_iterator<char>(file)),
-                                          std::istreambuf_iterator<char>());
+            // Read header
+            FileHeader header;
+            file.read(reinterpret_cast<char*>(&header), sizeof(FileHeader));
+
+            // Validate magic bytes
+            if (std::memcmp(header.magic, MAGIC_BYTES, 4) != 0) {
+                std::cerr << "Invalid vault file format" << std::endl;
+                return false;
+            }
+
+            // Skip salt (we already have the master key)
+            file.seekg(SALT_SIZE, std::ios::cur);
+
+            // Read encrypted data
+            std::vector<uint8_t> encrypted(header.data_size);
+            file.read(reinterpret_cast<char*>(encrypted.data()), header.data_size);
             file.close();
 
             // Decrypt with current key
-            auto decrypted = crypto::decrypt_data(file_data, master_key);
+            std::string decrypted = crypto::decrypt_data(encrypted, master_key);
             vault_data = json::parse(decrypted);
 
             return true;
