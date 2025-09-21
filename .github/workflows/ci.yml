@@ -11,7 +11,7 @@ jobs:
     runs-on: pop-os-1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install dependencies
       run: |
@@ -43,7 +43,7 @@ jobs:
         ldd localpdub-linux-x86_64 || true
 
     - name: Upload binary as artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: localpdub-linux-x86_64-ci
         path: build/localpdub-linux-x86_64
