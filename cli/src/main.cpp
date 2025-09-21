@@ -81,37 +81,84 @@ private:
             std::cout << ui::box::DOUBLE_HORIZONTAL << ui::box::DOUBLE_HORIZONTAL << ui::box::DOUBLE_HORIZONTAL;
             std::cout << ui::AnsiUI::color(ui::ansi::RESET) << "\n\n";
 
-            std::cout << ui::AnsiUI::cyan("1") << ". List all entries\n";
-            std::cout << ui::AnsiUI::cyan("2") << ". Search entries\n";
-            std::cout << ui::AnsiUI::cyan("3") << ". " << ui::AnsiUI::green("Add new entry") << "\n";
-            std::cout << ui::AnsiUI::cyan("4") << ". View entry details\n";
-            std::cout << ui::AnsiUI::cyan("5") << ". " << ui::AnsiUI::yellow("Edit entry") << "\n";
-            std::cout << ui::AnsiUI::cyan("6") << ". " << ui::AnsiUI::red("Delete entry") << "\n";
-            std::cout << ui::AnsiUI::cyan("7") << ". " << ui::AnsiUI::magenta("Generate password") << "\n";
-            std::cout << ui::AnsiUI::cyan("8") << ". " << ui::AnsiUI::blue("Sync with other devices") << "\n";
-            std::cout << ui::AnsiUI::cyan("9") << ". " << ui::AnsiUI::green("Save and exit") << "\n";
-            std::cout << ui::AnsiUI::cyan("0") << ". " << ui::AnsiUI::yellow("Exit without saving") << "\n";
+            // Menu items with hotkeys highlighted
+            std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "["
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_CYAN) << "L"
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "]"
+                     << ui::AnsiUI::color(ui::ansi::RESET) << "ist all entries\n";
+
+            std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "["
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_CYAN) << "S"
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "]"
+                     << ui::AnsiUI::color(ui::ansi::RESET) << "earch entries\n";
+
+            std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "["
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_GREEN) << "A"
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "]"
+                     << ui::AnsiUI::color(ui::ansi::RESET) << "dd new entry\n";
+
+            std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "["
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_CYAN) << "V"
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "]"
+                     << ui::AnsiUI::color(ui::ansi::RESET) << "iew entry details\n";
+
+            std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "["
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_YELLOW) << "E"
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "]"
+                     << ui::AnsiUI::color(ui::ansi::RESET) << "dit entry\n";
+
+            std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "["
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_RED) << "D"
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "]"
+                     << ui::AnsiUI::color(ui::ansi::RESET) << "elete entry\n";
+
+            std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "["
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_MAGENTA) << "G"
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "]"
+                     << ui::AnsiUI::color(ui::ansi::RESET) << "enerate password\n";
+
+            std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "["
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_BLUE) << "Y"
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "]"
+                     << ui::AnsiUI::color(ui::ansi::RESET) << " s"
+                     << ui::AnsiUI::blue("Y") << "nc with other devices\n";
+
+            std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "["
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_GREEN) << "X"
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "]"
+                     << ui::AnsiUI::color(ui::ansi::RESET) << " Save and e"
+                     << ui::AnsiUI::green("X") << "it\n";
+
+            std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "["
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_YELLOW) << "Q"
+                     << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << "]"
+                     << ui::AnsiUI::color(ui::ansi::RESET) << "uit without saving\n";
 
             std::cout << "\n" << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE);
             std::cout << ui::box::ARROW_RIGHT << " Choice: ";
             std::cout << ui::AnsiUI::color(ui::ansi::RESET);
 
-            int choice;
+            // Get single character input
+            char choice;
             std::cin >> choice;
             std::cin.ignore();
 
+            // Convert to uppercase for case-insensitive matching
+            choice = std::toupper(choice);
+
             switch (choice) {
-                case 1: list_entries(); break;
-                case 2: search_entries(); break;
-                case 3: add_entry(); break;
-                case 4: view_entry(); break;
-                case 5: edit_entry(); break;
-                case 6: delete_entry(); break;
-                case 7: generate_password_menu(); break;
-                case 8: sync_with_devices(); break;
-                case 9: save_and_exit(); break;
-                case 0: exit_without_saving(); break;
-                default: std::cout << "Invalid choice. Try again.\n";
+                case 'L': case '1': list_entries(); break;
+                case 'S': case '2': search_entries(); break;
+                case 'A': case '3': add_entry(); break;
+                case 'V': case '4': view_entry(); break;
+                case 'E': case '5': edit_entry(); break;
+                case 'D': case '6': delete_entry(); break;
+                case 'G': case '7': generate_password_menu(); break;
+                case 'Y': case '8': sync_with_devices(); break;
+                case 'X': case '9': save_and_exit(); break;
+                case 'Q': case '0': exit_without_saving(); break;
+                default:
+                    std::cout << ui::AnsiUI::error("Invalid choice. Try again.") << "\n";
             }
         }
     }
@@ -159,24 +206,91 @@ private:
         auto entries = vault.get_all_entries();
 
         if (entries.empty()) {
-            std::cout << "\nNo entries in vault.\n";
+            std::cout << "\n" << ui::AnsiUI::warning("No entries in vault.") << "\n";
             return;
         }
 
-        std::cout << "\n═══ Password Entries ═══\n\n";
-        std::cout << std::left << std::setw(5) << "ID"
-                  << std::setw(30) << "Title"
-                  << std::setw(30) << "Username"
-                  << std::setw(30) << "URL" << "\n";
-        std::cout << std::string(95, '-') << "\n";
+        // Header
+        std::cout << "\n" << ui::AnsiUI::color(ui::ansi::BRIGHT_CYAN);
+        std::cout << ui::box::DOUBLE_HORIZONTAL << ui::box::DOUBLE_HORIZONTAL << ui::box::DOUBLE_HORIZONTAL;
+        std::cout << " Password Entries ";
+        std::cout << ui::box::DOUBLE_HORIZONTAL << ui::box::DOUBLE_HORIZONTAL << ui::box::DOUBLE_HORIZONTAL;
+        std::cout << ui::AnsiUI::color(ui::ansi::RESET) << "\n\n";
 
+        // Table header
+        std::cout << ui::AnsiUI::color(ui::ansi::BOLD) << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE);
+        std::cout << std::left
+                  << std::setw(4) << "ID"
+                  << " " << ui::box::VERTICAL << " "
+                  << std::setw(28) << "Title"
+                  << " " << ui::box::VERTICAL << " "
+                  << std::setw(28) << "Username"
+                  << " " << ui::box::VERTICAL << " "
+                  << std::setw(30) << "URL"
+                  << ui::AnsiUI::color(ui::ansi::RESET) << "\n";
+
+        // Separator line
+        std::cout << ui::AnsiUI::color(ui::ansi::DIM);
+        for (int i = 0; i < 100; ++i) std::cout << ui::box::HORIZONTAL;
+        std::cout << ui::AnsiUI::color(ui::ansi::RESET) << "\n";
+
+        // Entries with alternating colors
         int index = 1;
         for (const auto& entry : entries) {
-            std::cout << std::left << std::setw(5) << index++
-                      << std::setw(30) << truncate(entry.value("title", ""), 28)
-                      << std::setw(30) << truncate(entry.value("username", ""), 28)
-                      << std::setw(30) << truncate(entry.value("url", ""), 28) << "\n";
+            // Alternate row colors
+            if (index % 2 == 0) {
+                std::cout << ui::AnsiUI::color(ui::ansi::DIM);
+            }
+
+            // ID number
+            std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_YELLOW)
+                      << std::left << std::setw(4) << index
+                      << ui::AnsiUI::color(ui::ansi::RESET);
+
+            if (index % 2 == 0) {
+                std::cout << ui::AnsiUI::color(ui::ansi::DIM);
+            }
+
+            std::cout << " " << ui::box::VERTICAL << " ";
+
+            // Title (in bright white for emphasis)
+            std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE)
+                      << std::setw(28) << truncate(entry.value("title", ""), 27)
+                      << ui::AnsiUI::color(ui::ansi::RESET);
+
+            if (index % 2 == 0) {
+                std::cout << ui::AnsiUI::color(ui::ansi::DIM);
+            }
+
+            std::cout << " " << ui::box::VERTICAL << " ";
+
+            // Username (in cyan)
+            std::cout << ui::AnsiUI::color(ui::ansi::CYAN)
+                      << std::setw(28) << truncate(entry.value("username", ""), 27)
+                      << ui::AnsiUI::color(ui::ansi::RESET);
+
+            if (index % 2 == 0) {
+                std::cout << ui::AnsiUI::color(ui::ansi::DIM);
+            }
+
+            std::cout << " " << ui::box::VERTICAL << " ";
+
+            // URL (in blue, underlined if supported)
+            std::cout << ui::AnsiUI::color(ui::ansi::BLUE) << ui::AnsiUI::color(ui::ansi::UNDERLINE)
+                      << std::setw(30) << truncate(entry.value("url", ""), 29)
+                      << ui::AnsiUI::color(ui::ansi::RESET) << "\n";
+
+            index++;
         }
+
+        // Footer
+        std::cout << ui::AnsiUI::color(ui::ansi::DIM);
+        for (int i = 0; i < 100; ++i) std::cout << ui::box::HORIZONTAL;
+        std::cout << ui::AnsiUI::color(ui::ansi::RESET) << "\n";
+
+        std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_GREEN)
+                  << "Total: " << entries.size() << " entries"
+                  << ui::AnsiUI::color(ui::ansi::RESET) << "\n";
     }
 
     void search_entries() {
