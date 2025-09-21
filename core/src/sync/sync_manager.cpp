@@ -386,11 +386,15 @@ std::vector<EntryDigest> SyncManager::compute_vault_digest() {
 
     try {
         // Use the vault entries that were set via set_vault_entries()
-        if (vault_entries_.empty()) {
-            return digest;
+        if (vault_entries_.is_null() || !vault_entries_.is_array()) {
+            return digest;  // No entries or invalid format
         }
 
         for (const auto& entry : vault_entries_) {
+            if (!entry.is_object() || !entry.contains("id")) {
+                continue;  // Skip invalid entries
+            }
+
             EntryDigest ed;
             ed.id = entry["id"];
 
@@ -429,7 +433,7 @@ std::vector<json> SyncManager::find_entries_to_send(
 
     try {
         // Use the vault entries that were set via set_vault_entries()
-        if (vault_entries_.empty()) {
+        if (vault_entries_.is_null() || !vault_entries_.is_array()) {
             return entries_to_send;
         }
 
@@ -453,7 +457,7 @@ std::vector<json> SyncManager::find_entries_to_send(
             if (should_send) {
                 // Find the full entry in vault data
                 for (const auto& entry : vault_entries_) {
-                    if (entry["id"] == local_entry.id) {
+                    if (entry.is_object() && entry.contains("id") && entry["id"] == local_entry.id) {
                         entries_to_send.push_back(entry);
                         break;
                     }
@@ -522,11 +526,14 @@ std::vector<std::string> SyncManager::apply_changes(
 
     try {
         // Work with the vault entries in memory
-        if (vault_entries_.empty()) {
+        if (vault_entries_.is_null() || !vault_entries_.is_array()) {
             vault_entries_ = json::array();
         }
 
         for (const auto& remote_entry : entries) {
+            if (!remote_entry.is_object() || !remote_entry.contains("id")) {
+                continue;  // Skip invalid entries
+            }
             std::string entry_id = remote_entry["id"];
 
             // Find local entry if exists
