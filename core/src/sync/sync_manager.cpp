@@ -266,14 +266,7 @@ void SyncManager::handle_sync_client(int client_socket) {
         std::cout << "  Found " << entries_to_send.size() << " entries to send to client" << std::endl;
 
         // Send entries
-        json entries_msg = {
-            {"type", "ENTRIES"},
-            {"entries", entries_to_send}
-        };
-
-        std::string entries_str = entries_msg.dump() + "\n";
-        sent = send(client_socket, entries_str.c_str(), entries_str.length(), 0);
-        if (sent <= 0) {
+        if (!send_entries(client_socket, entries_to_send)) {
             std::cout << "  ✗ Failed to send entries" << std::endl;
             return;
         }
