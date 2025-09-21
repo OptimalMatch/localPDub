@@ -69,8 +69,10 @@ jobs:
 
   create-release:
     needs: build-linux-x86_64
-    runs-on: ubuntu-latest
+    runs-on: pop-os-1
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout code
@@ -92,74 +94,55 @@ jobs:
         fi
 
     - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ steps.set_tag.outputs.tag }}
-        release_name: LocalPDub ${{ steps.set_tag.outputs.tag }}
-        body: |
-          # LocalPDub Password Manager ${{ steps.set_tag.outputs.tag }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Check if release already exists
+        if gh release view "${{ steps.set_tag.outputs.tag }}" &>/dev/null; then
+          echo "Release ${{ steps.set_tag.outputs.tag }} already exists, deleting..."
+          gh release delete "${{ steps.set_tag.outputs.tag }}" --yes
+        fi
 
-          ## Downloads
+        # Create release with description
+        cat << 'EOF' > release_notes.md
+        # LocalPDub Password Manager ${{ steps.set_tag.outputs.tag }}
 
-          ### Linux x86_64 (Debian/Ubuntu)
-          Download the appropriate file for your system:
-          - `localpdub-linux-x86_64` - Standalone executable
-          - `localpdub-linux-x86_64.tar.gz` - Compressed archive
+        ## Downloads
 
-          ## Installation
+        ### Linux x86_64 (Debian/Ubuntu)
+        Download the appropriate file for your system:
+        - `localpdub-linux-x86_64` - Standalone executable
+        - `localpdub-linux-x86_64.tar.gz` - Compressed archive
 
-          ```bash
-          # Download and extract
-          tar -xzf localpdub-linux-x86_64.tar.gz
+        ## Installation
 
-          # Make executable
-          chmod +x localpdub-linux-x86_64
+        ```bash
+        # Download and extract
+        tar -xzf localpdub-linux-x86_64.tar.gz
 
-          # Optional: Move to PATH
-          sudo mv localpdub-linux-x86_64 /usr/local/bin/localpdub
-          ```
+        # Make executable
+        chmod +x localpdub-linux-x86_64
 
-          ## Features
-          - Secure password storage with Argon2 key derivation
-          - AES-256 encryption for vault data
-          - Network sync between devices
-          - Colorful ANSI terminal interface
-          - Single keystroke menu navigation
+        # Optional: Move to PATH
+        sudo mv localpdub-linux-x86_64 /usr/local/bin/localpdub
+        ```
 
-          ## Checksums
-          SHA256 checksums are provided for verification.
-        draft: false
-        prerelease: false
+        ## Features
+        - Secure password storage with Argon2 key derivation
+        - AES-256 encryption for vault data
+        - Network sync between devices
+        - Colorful ANSI terminal interface
+        - Single keystroke menu navigation
 
-    - name: Upload Release Asset - Binary
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: release/localpdub-linux-x86_64
-        asset_name: localpdub-linux-x86_64
-        asset_content_type: application/octet-stream
+        ## Checksums
+        SHA256 checksums are provided for verification.
+        EOF
 
-    - name: Upload Release Asset - Archive
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: release/localpdub-linux-x86_64.tar.gz
-        asset_name: localpdub-linux-x86_64.tar.gz
-        asset_content_type: application/gzip
-
-    - name: Upload Release Asset - Checksum
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: release/localpdub-linux-x86_64.tar.gz.sha256
-        asset_name: localpdub-linux-x86_64.tar.gz.sha256
-        asset_content_type: text/plain
+        # Create the release and upload assets
+        gh release create "${{ steps.set_tag.outputs.tag }}" \
+          --title "LocalPDub ${{ steps.set_tag.outputs.tag }}" \
+          --notes-file release_notes.md \
+          release/localpdub-linux-x86_64 \
+          release/localpdub-linux-x86_64.tar.gz \
+          release/localpdub-linux-x86_64.tar.gz.sha256
