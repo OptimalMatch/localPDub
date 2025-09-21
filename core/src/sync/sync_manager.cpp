@@ -626,21 +626,55 @@ std::vector<json> SyncManager::receive_entries(int socket) {
     std::vector<json> entries;
 
     try {
-        char buffer[65536];  // Increased buffer size for larger data
-        int received = recv(socket, buffer, sizeof(buffer) - 1, 0);
+        // Read until we get a complete message (newline-delimited)
+        std::string entries_data;
+        char buffer[4096];
+        bool complete = false;
+        int total_received = 0;
 
-        if (received > 0) {
-            buffer[received] = '\0';
-            std::cout << "    DEBUG: receive_entries got " << received << " bytes" << std::endl;
+        while (!complete) {
+            int received = recv(socket, buffer, sizeof(buffer) - 1, 0);
 
+            if (received > 0) {
+                buffer[received] = '\0';
+                entries_data.append(buffer, received);
+                total_received += received;
+
+                // Check if we have a complete message (ends with newline)
+                if (entries_data.find('\n') != std::string::npos) {
+                    complete = true;
+                }
+
+                // Safety limit to prevent infinite loops
+                if (total_received > 10 * 1024 * 1024) {  // 10MB limit
+                    std::cerr << "Message too large, aborting" << std::endl;
+                    break;
+                }
+            } else if (received == 0) {
+                std::cout << "    DEBUG: Connection closed by peer after " << total_received << " bytes" << std::endl;
+                // If we have partial data, still try to parse it
+                if (!entries_data.empty()) {
+                    complete = true;
+                } else {
+                    break;
+                }
+            } else {
+                std::cout << "    DEBUG: recv failed with error" << std::endl;
+                break;
+            }
+        }
+
+        std::cout << "    DEBUG: receive_entries got total " << total_received << " bytes" << std::endl;
+
+        if (!entries_data.empty()) {
             // Find the end of the JSON object (newline delimiter)
-            std::string entries_data(buffer, received);
             size_t entries_newline = entries_data.find('\n');
             if (entries_newline == std::string::npos) {
                 entries_newline = entries_data.length();
             }
 
             std::string entries_json_str = entries_data.substr(0, entries_newline);
+
             json msg = json::parse(entries_json_str);
 
             if (msg.contains("type") && msg["type"] == "ENTRIES") {
@@ -649,10 +683,6 @@ std::vector<json> SyncManager::receive_entries(int socket) {
             } else {
                 std::cout << "    DEBUG: Message type is not ENTRIES" << std::endl;
             }
-        } else if (received == 0) {
-            std::cout << "    DEBUG: Connection closed by peer" << std::endl;
-        } else {
-            std::cout << "    DEBUG: recv failed with error" << std::endl;
         }
     } catch (const std::exception& e) {
         std::cerr << "Error receiving entries: " << e.what() << std::endl;
