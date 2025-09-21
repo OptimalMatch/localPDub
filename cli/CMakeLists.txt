@@ -45,10 +45,34 @@ set(OUTPUT_NAME "localpdub-${PLATFORM}-${ARCH_FULL}")
 # Find required packages
 find_package(OpenSSL REQUIRED)
 find_package(nlohmann_json REQUIRED)
-find_package(PkgConfig REQUIRED)
 
-# Find Argon2
-pkg_check_modules(ARGON2 REQUIRED libargon2)
+# For cross-compilation, handle Argon2 differently
+if(CMAKE_CROSSCOMPILING)
+    # When cross-compiling, look for Argon2 manually
+    find_path(ARGON2_INCLUDE_DIR
+        NAMES argon2.h
+        PATHS ${CMAKE_PREFIX_PATH}/include
+              ${CMAKE_FIND_ROOT_PATH}/include
+    )
+    find_library(ARGON2_LIBRARY
+        NAMES argon2
+        PATHS ${CMAKE_PREFIX_PATH}/lib
+              ${CMAKE_FIND_ROOT_PATH}/lib
+    )
+
+    if(ARGON2_INCLUDE_DIR AND ARGON2_LIBRARY)
+        set(ARGON2_FOUND TRUE)
+        set(ARGON2_LIBRARIES ${ARGON2_LIBRARY})
+        set(ARGON2_INCLUDE_DIRS ${ARGON2_INCLUDE_DIR})
+        message(STATUS "Found Argon2: ${ARGON2_LIBRARY}")
+    else()
+        message(FATAL_ERROR "Could not find Argon2 library for cross-compilation")
+    endif()
+else()
+    # Use pkg-config for native builds
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(ARGON2 REQUIRED libargon2)
+endif()
 
 # Source files
 set(SOURCES
@@ -68,14 +92,30 @@ target_include_directories(localpdub PRIVATE
 )
 
 # Link libraries
-target_link_libraries(localpdub
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    nlohmann_json::nlohmann_json
-    ${ARGON2_LIBRARIES}
-    pthread
-    stdc++fs
-)
+if(CMAKE_CROSSCOMPILING)
+    # For cross-compilation, link statically to avoid runtime dependencies
+    target_link_libraries(localpdub
+        ${OPENSSL_SSL_LIBRARY}
+        ${OPENSSL_CRYPTO_LIBRARY}
+        nlohmann_json::nlohmann_json
+        ${ARGON2_LIBRARIES}
+        pthread
+        dl
+        stdc++fs
+        -static-libgcc
+        -static-libstdc++
+    )
+else()
+    # Normal linking for native builds
+    target_link_libraries(localpdub
+        OpenSSL::SSL
+        OpenSSL::Crypto
+        nlohmann_json::nlohmann_json
+        ${ARGON2_LIBRARIES}
+        pthread
+        stdc++fs
+    )
+endif()
 
 # Architecture-specific optimizations
 if(ARCH STREQUAL "x86")
