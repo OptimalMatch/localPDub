@@ -242,6 +242,16 @@ public:
         vault_path = path;
     }
 
+    bool set_all_entries(const json& new_entries) {
+        if (!is_open) {
+            return false;
+        }
+
+        // Replace all entries with the new set
+        vault_data["entries"] = new_entries;
+        return true;
+    }
+
     bool reload_entries() {
         if (!is_open) {
             return false;

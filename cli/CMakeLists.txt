@@ -113,6 +113,15 @@ elseif(ARCH STREQUAL "arm")
     endif()
 endif()
 
+# Get build timestamp
+string(TIMESTAMP BUILD_TIMESTAMP "%Y-%m-%d %H:%M:%S" UTC)
+
+# Pass build timestamp as compile definition
+target_compile_definitions(localpdub PRIVATE
+    BUILD_TIMESTAMP="${BUILD_TIMESTAMP}"
+    VERSION_STRING="${PROJECT_VERSION}"
+)
+
 # General compiler flags
 target_compile_options(localpdub PRIVATE
     -Wall -Wextra -O2

@@ -72,6 +72,10 @@ public:
     // Get sync history
     std::vector<SyncResult> get_sync_history() const;
 
+    // Set callback for when sync connection is received
+    using ConnectionCallback = std::function<void()>;
+    void set_connection_callback(ConnectionCallback callback);
+
 private:
     // Connection management
     bool establish_connection(const Device& device);
@@ -104,6 +108,7 @@ private:
     std::unique_ptr<std::thread> server_thread_;
     std::vector<SyncResult> sync_history_;
     mutable std::mutex history_mutex_;
+    ConnectionCallback connection_callback_;
 
     // Constants
     static constexpr int SOCKET_TIMEOUT_SECONDS = 30;

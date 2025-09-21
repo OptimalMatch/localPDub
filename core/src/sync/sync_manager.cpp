@@ -123,17 +123,26 @@ void SyncManager::handle_sync_client(int client_socket) {
     setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     setsockopt(client_socket, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
+    std::cout << "\n✓ Incoming sync connection received" << std::endl;
+
+    // Notify callback that sync connection was received
+    if (connection_callback_) {
+        connection_callback_();
+    }
+
     try {
         // Receive sync request
-        char buffer[4096];
+        char buffer[65536];  // Increased buffer size
         int received = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
         if (received <= 0) {
+            std::cout << "  ✗ Failed to receive sync request" << std::endl;
             return;
         }
         buffer[received] = '\0';
+        std::cout << "  Received sync request (" << received << " bytes)" << std::endl;
 
         // Find the end of the JSON object (newline delimiter)
-        std::string request_data(buffer);
+        std::string request_data(buffer, received);
         size_t newline_pos = request_data.find('\n');
         if (newline_pos == std::string::npos) {
             // No newline found, use entire buffer
@@ -142,6 +151,14 @@ void SyncManager::handle_sync_client(int client_socket) {
 
         std::string json_str = request_data.substr(0, newline_pos);
         json request = json::parse(json_str);
+        std::cout << "  Parsed sync request from device: " << request.value("device_id", "unknown") << std::endl;
+
+        // Check if there's remaining data (the digest might be in the same buffer)
+        std::string remaining_data;
+        if (newline_pos + 1 < request_data.length()) {
+            remaining_data = request_data.substr(newline_pos + 1);
+            std::cout << "  Found additional data in buffer (" << remaining_data.length() << " bytes)" << std::endl;
+        }
 
         // Authenticate if required
         if (!passphrase_.empty()) {
@@ -150,8 +167,56 @@ void SyncManager::handle_sync_client(int client_socket) {
             }
         }
 
-        // Compute local vault digest
+        // Receive client digest first (client sends first)
+        std::string digest_json_str;
+
+        if (!remaining_data.empty()) {
+            // Digest might be in the remaining data
+            size_t digest_newline = remaining_data.find('\n');
+            if (digest_newline != std::string::npos) {
+                // Complete digest found in remaining data
+                digest_json_str = remaining_data.substr(0, digest_newline);
+                std::cout << "  Found client digest in initial buffer" << std::endl;
+            } else {
+                // Partial digest, need to receive more
+                std::cout << "  Partial digest in buffer, receiving more..." << std::endl;
+                received = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
+                if (received <= 0) {
+                    std::cout << "  ✗ Failed to receive rest of client digest" << std::endl;
+                    return;
+                }
+                buffer[received] = '\0';
+                remaining_data += std::string(buffer, received);
+                digest_newline = remaining_data.find('\n');
+                if (digest_newline == std::string::npos) {
+                    digest_newline = remaining_data.length();
+                }
+                digest_json_str = remaining_data.substr(0, digest_newline);
+            }
+        } else {
+            // Need to receive digest separately
+            std::cout << "  Waiting for client digest..." << std::endl;
+            received = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
+            if (received <= 0) {
+                std::cout << "  ✗ Failed to receive client digest" << std::endl;
+                return;
+            }
+            buffer[received] = '\0';
+            std::cout << "  Received client digest (" << received << " bytes)" << std::endl;
+
+            std::string digest_data(buffer, received);
+            size_t digest_newline = digest_data.find('\n');
+            if (digest_newline == std::string::npos) {
+                digest_newline = digest_data.length();
+            }
+            digest_json_str = digest_data.substr(0, digest_newline);
+        }
+
+        json client_digest_msg = json::parse(digest_json_str);
+
+        // Now compute and send our digest
         auto local_digest = compute_vault_digest();
+        std::cout << "  Computing digest for " << local_digest.size() << " local entries" << std::endl;
 
         // Send local digest
         json digest_msg = {
@@ -169,19 +234,26 @@ void SyncManager::handle_sync_client(int client_socket) {
         }
 
         std::string digest_str = digest_msg.dump() + "\n";
-        send(client_socket, digest_str.c_str(), digest_str.length(), 0);
-
-        // Receive remote digest
-        received = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
-        if (received <= 0) {
+        ssize_t sent = send(client_socket, digest_str.c_str(), digest_str.length(), 0);
+        if (sent <= 0) {
+            std::cout << "  ✗ Failed to send digest" << std::endl;
             return;
         }
-        buffer[received] = '\0';
+        std::cout << "  Sent digest to client" << std::endl;
 
-        json remote_digest_msg = json::parse(buffer);
+        // Parse the client digest that we already received
         std::vector<EntryDigest> remote_digest;
 
-        for (const auto& entry : remote_digest_msg["entries"]) {
+        if (!client_digest_msg.contains("entries") || !client_digest_msg["entries"].is_array()) {
+            return;  // Invalid message format
+        }
+
+        for (const auto& entry : client_digest_msg["entries"]) {
+            if (!entry.is_object() || !entry.contains("id") ||
+                !entry.contains("modified") || !entry.contains("hash")) {
+                continue;  // Skip invalid entries
+            }
+
             EntryDigest digest;
             digest.id = entry["id"];
             digest.modified = std::chrono::system_clock::from_time_t(entry["modified"]);
@@ -191,6 +263,7 @@ void SyncManager::handle_sync_client(int client_socket) {
 
         // Determine what to send
         auto entries_to_send = find_entries_to_send(local_digest, remote_digest);
+        std::cout << "  Found " << entries_to_send.size() << " entries to send to client" << std::endl;
 
         // Send entries
         json entries_msg = {
@@ -199,17 +272,37 @@ void SyncManager::handle_sync_client(int client_socket) {
         };
 
         std::string entries_str = entries_msg.dump() + "\n";
-        send(client_socket, entries_str.c_str(), entries_str.length(), 0);
+        sent = send(client_socket, entries_str.c_str(), entries_str.length(), 0);
+        if (sent <= 0) {
+            std::cout << "  ✗ Failed to send entries" << std::endl;
+            return;
+        }
+        std::cout << "  Sent " << entries_to_send.size() << " entries to client" << std::endl;
 
         // Receive entries from client
+        std::cout << "  Waiting for client entries..." << std::endl;
         received = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
         if (received > 0) {
+            std::cout << "  Received entries message (" << received << " bytes)" << std::endl;
             buffer[received] = '\0';
-            json received_entries_msg = json::parse(buffer);
+
+            // Find the end of the JSON object (newline delimiter)
+            std::string entries_data(buffer, received);
+            size_t entries_newline = entries_data.find('\n');
+            if (entries_newline == std::string::npos) {
+                entries_newline = entries_data.length();
+            }
+
+            std::string entries_json_str = entries_data.substr(0, entries_newline);
+            json received_entries_msg = json::parse(entries_json_str);
 
             if (received_entries_msg["type"] == "ENTRIES") {
                 // Apply received entries
-                apply_changes(received_entries_msg["entries"], SyncStrategy::NEWEST_WINS);
+                auto received_entries = received_entries_msg["entries"].get<std::vector<json>>();
+                std::cout << "  Received " << received_entries.size() << " entries from client" << std::endl;
+                auto conflicts = apply_changes(received_entries, SyncStrategy::NEWEST_WINS);
+                std::cout << "  Applied changes (" << conflicts.size() << " conflicts resolved)" << std::endl;
+                std::cout << "✓ Sync server processing completed" << std::endl;
             }
         }
 
@@ -293,10 +386,18 @@ SyncResult SyncManager::sync_with_devices(
             }
 
             std::string digest_str = digest_msg.dump() + "\n";
-            send(sock, digest_str.c_str(), digest_str.length(), 0);
+            std::cout << "  Sending digest to server (" << local_digest.size() << " entries)..." << std::endl;
+            ssize_t sent = send(sock, digest_str.c_str(), digest_str.length(), 0);
+            if (sent <= 0) {
+                close(sock);
+                total_result.errors.push_back("Failed to send digest to " + device.name);
+                continue;
+            }
+            std::cout << "  Sent digest successfully" << std::endl;
 
             // Receive remote digest
-            char buffer[4096];
+            std::cout << "  Waiting for server digest..." << std::endl;
+            char buffer[65536];  // Increased buffer size
             int received = recv(sock, buffer, sizeof(buffer) - 1, 0);
             if (received <= 0) {
                 close(sock);
@@ -304,11 +405,31 @@ SyncResult SyncManager::sync_with_devices(
                 continue;
             }
             buffer[received] = '\0';
+            std::cout << "  Received digest (" << received << " bytes)" << std::endl;
 
-            json remote_digest_msg = json::parse(buffer);
+            // Find the end of the JSON object (newline delimiter)
+            std::string digest_data(buffer, received);
+            size_t digest_newline = digest_data.find('\n');
+            if (digest_newline == std::string::npos) {
+                digest_newline = digest_data.length();
+            }
+
+            std::string digest_json_str = digest_data.substr(0, digest_newline);
+            json remote_digest_msg = json::parse(digest_json_str);
             std::vector<EntryDigest> remote_digest;
 
+            if (!remote_digest_msg.contains("entries") || !remote_digest_msg["entries"].is_array()) {
+                close(sock);
+                total_result.errors.push_back("Invalid digest format from " + device.name);
+                continue;
+            }
+
             for (const auto& entry : remote_digest_msg["entries"]) {
+                if (!entry.is_object() || !entry.contains("id") ||
+                    !entry.contains("modified") || !entry.contains("hash")) {
+                    continue;  // Skip invalid entries
+                }
+
                 EntryDigest digest;
                 digest.id = entry["id"];
                 digest.modified = std::chrono::system_clock::from_time_t(entry["modified"]);
@@ -316,16 +437,20 @@ SyncResult SyncManager::sync_with_devices(
                 remote_digest.push_back(digest);
             }
 
-            // Send our entries
+            // Send our entries (always send, even if empty)
             auto entries_to_send = find_entries_to_send(local_digest, remote_digest);
-            if (!entries_to_send.empty()) {
-                if (send_entries(sock, entries_to_send)) {
-                    total_result.entries_sent += entries_to_send.size();
-                }
+            std::cout << "  Sending " << entries_to_send.size() << " entries to server..." << std::endl;
+            if (send_entries(sock, entries_to_send)) {
+                total_result.entries_sent += entries_to_send.size();
+                std::cout << "  Sent successfully" << std::endl;
+            } else {
+                std::cout << "  Failed to send entries" << std::endl;
             }
 
             // Receive their entries
+            std::cout << "  Waiting for server entries..." << std::endl;
             auto received_entries = receive_entries(sock);
+            std::cout << "  Received " << received_entries.size() << " entries from server" << std::endl;
             if (!received_entries.empty()) {
                 auto conflicts = apply_changes(received_entries, strategy);
                 total_result.entries_received += received_entries.size();
@@ -478,7 +603,7 @@ bool SyncManager::send_entries(int socket, const std::vector<json>& entries) {
             {"entries", entries}
         };
 
-        std::string msg_str = msg.dump();
+        std::string msg_str = msg.dump() + "\n";  // Add newline delimiter
         size_t total_sent = 0;
 
         while (total_sent < msg_str.length()) {
@@ -501,15 +626,33 @@ std::vector<json> SyncManager::receive_entries(int socket) {
     std::vector<json> entries;
 
     try {
-        char buffer[4096];
+        char buffer[65536];  // Increased buffer size for larger data
         int received = recv(socket, buffer, sizeof(buffer) - 1, 0);
+
         if (received > 0) {
             buffer[received] = '\0';
-            json msg = json::parse(buffer);
+            std::cout << "    DEBUG: receive_entries got " << received << " bytes" << std::endl;
 
-            if (msg["type"] == "ENTRIES") {
-                entries = msg["entries"].get<std::vector<json>>();
+            // Find the end of the JSON object (newline delimiter)
+            std::string entries_data(buffer, received);
+            size_t entries_newline = entries_data.find('\n');
+            if (entries_newline == std::string::npos) {
+                entries_newline = entries_data.length();
             }
+
+            std::string entries_json_str = entries_data.substr(0, entries_newline);
+            json msg = json::parse(entries_json_str);
+
+            if (msg.contains("type") && msg["type"] == "ENTRIES") {
+                entries = msg["entries"].get<std::vector<json>>();
+                std::cout << "    DEBUG: Parsed " << entries.size() << " entries from message" << std::endl;
+            } else {
+                std::cout << "    DEBUG: Message type is not ENTRIES" << std::endl;
+            }
+        } else if (received == 0) {
+            std::cout << "    DEBUG: Connection closed by peer" << std::endl;
+        } else {
+            std::cout << "    DEBUG: recv failed with error" << std::endl;
         }
     } catch (const std::exception& e) {
         std::cerr << "Error receiving entries: " << e.what() << std::endl;
@@ -592,6 +735,11 @@ void SyncManager::set_passphrase(const std::string& passphrase) {
 
 void SyncManager::set_vault_entries(const json& entries) {
     vault_entries_ = entries;
+    std::cout << "  SyncManager: Set " << vault_entries_.size() << " vault entries" << std::endl;
+}
+
+void SyncManager::set_connection_callback(ConnectionCallback callback) {
+    connection_callback_ = callback;
 }
 
 std::vector<SyncResult> SyncManager::get_sync_history() const {

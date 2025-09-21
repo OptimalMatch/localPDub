@@ -41,21 +41,31 @@ public:
         // Animated title with gradient effect
         std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_CYAN);
         std::cout << ui::box::DOUBLE_TOP_LEFT;
-        for (int i = 0; i < 42; ++i) std::cout << ui::box::DOUBLE_HORIZONTAL;
+        for (int i = 0; i < 50; ++i) std::cout << ui::box::DOUBLE_HORIZONTAL;
         std::cout << ui::box::DOUBLE_TOP_RIGHT << "\n";
 
         std::cout << ui::box::DOUBLE_VERTICAL;
         std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_WHITE) << ui::AnsiUI::color(ui::ansi::BOLD);
-        std::cout << "  LocalPDub Password Manager v0.1.0     ";
+        std::cout << "  LocalPDub Password Manager v" << VERSION_STRING;
+        // Pad to align the box
+        for (int i = 0; i < (50 - 30 - std::string(VERSION_STRING).length() - 4); ++i) std::cout << " ";
         std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_CYAN) << ui::box::DOUBLE_VERTICAL << "\n";
 
         std::cout << ui::box::DOUBLE_VERTICAL;
         std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_MAGENTA);
-        std::cout << "  " << ui::box::STAR << " Secure " << ui::box::STAR << " Local " << ui::box::STAR << " Private " << ui::box::STAR << "       ";
+        std::cout << "  " << ui::box::STAR << " Secure " << ui::box::STAR << " Local " << ui::box::STAR << " Private " << ui::box::STAR;
+        for (int i = 0; i < 15; ++i) std::cout << " ";
+        std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_CYAN) << ui::box::DOUBLE_VERTICAL << "\n";
+
+        std::cout << ui::box::DOUBLE_VERTICAL;
+        std::cout << ui::AnsiUI::color(ui::ansi::DIM) << ui::AnsiUI::color(ui::ansi::BRIGHT_GREEN);
+        std::cout << "  Built: " << BUILD_TIMESTAMP << " UTC";
+        // Pad to align the box
+        for (int i = 0; i < (50 - 9 - std::string(BUILD_TIMESTAMP).length() - 6); ++i) std::cout << " ";
         std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_CYAN) << ui::box::DOUBLE_VERTICAL << "\n";
 
         std::cout << ui::box::DOUBLE_BOTTOM_LEFT;
-        for (int i = 0; i < 42; ++i) std::cout << ui::box::DOUBLE_HORIZONTAL;
+        for (int i = 0; i < 50; ++i) std::cout << ui::box::DOUBLE_HORIZONTAL;
         std::cout << ui::box::DOUBLE_BOTTOM_RIGHT;
         std::cout << ui::AnsiUI::color(ui::ansi::RESET) << "\n\n";
 
@@ -636,6 +646,13 @@ private:
         // Wait for user input or timeout
         std::atomic<bool> stop_requested(false);
         std::atomic<bool> input_received(false);
+        std::atomic<bool> sync_started(false);
+
+        // Set callback to stop discovery when sync starts
+        sync_server.set_connection_callback([&stop_requested, &sync_started]() {
+            stop_requested = true;
+            sync_started = true;
+        });
 
         // Use a non-blocking approach for input checking
         // Set stdin to non-blocking mode temporarily
@@ -686,14 +703,63 @@ private:
         fcntl(STDIN_FILENO, F_SETFL, flags);
 
         // Clean up input state
-        if (!input_received.load()) {
+        if (sync_started.load()) {
+            std::cout << "\nStopping discovery - sync connection established.\n";
+        } else if (!input_received.load()) {
             std::cout << "\nDiscovery timeout reached.\n";
             // Clear any pending input
             std::cin.clear();
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         }
 
+        // Check if vault was updated by incoming sync connections during discovery
+        auto updated_entries = sync_server.get_vault_entries();
+        std::cout << "\nChecking for vault updates from sync server..." << std::endl;
+        std::cout << "  Sync server has " << updated_entries.size() << " entries" << std::endl;
+        std::cout << "  Current vault has " << vault.get_all_entries().size() << " entries" << std::endl;
+
+        if (!updated_entries.empty()) {
+            auto current_entries = vault.get_all_entries();
+            bool vault_updated = false;
+
+            // Check if entries changed
+            if (updated_entries.size() != current_entries.size()) {
+                vault_updated = true;
+                std::cout << "  Vault needs update (different entry count)" << std::endl;
+            } else {
+                // Check for modified entries
+                for (const auto& entry : updated_entries) {
+                    if (!entry.is_object() || !entry.contains("id")) continue;
+
+                    std::string entry_id = entry["id"].get<std::string>();
+                    auto existing = std::find_if(current_entries.begin(), current_entries.end(),
+                        [&entry_id](const auto& e) {
+                            return e.contains("id") && e["id"] == entry_id;
+                        });
+
+                    if (existing == current_entries.end() || *existing != entry) {
+                        vault_updated = true;
+                        break;
+                    }
+                }
+            }
+
+            if (vault_updated) {
+                // Update and save vault with entries received as server
+                vault.set_all_entries(updated_entries);
+                if (vault.save_vault()) {
+                    std::cout << "\n✓ Vault updated from incoming sync connections\n";
+                }
+            }
+        }
+
         auto devices = discovery.get_discovered_devices();
+
+        // If sync was started by incoming connection, skip device selection
+        if (sync_started.load()) {
+            sync_server.stop_sync_server();
+            return;
+        }
 
         if (devices.empty()) {
             std::cout << "\nNo devices found.\n";
@@ -795,6 +861,40 @@ private:
 
         // Stop server
         sync_server.stop_sync_server();
+
+        // Get updated entries from sync manager (includes entries received as server)
+        auto final_entries = sync_server.get_vault_entries();
+        bool vault_updated = false;
+
+        // Check if we received new entries while acting as a server
+        if (!final_entries.empty()) {
+            auto current_entries = vault.get_all_entries();
+
+            // Check for new or updated entries
+            for (const auto& entry : final_entries) {
+                if (!entry.is_object() || !entry.contains("id")) continue;
+
+                std::string entry_id = entry["id"].get<std::string>();
+                auto existing = std::find_if(current_entries.begin(), current_entries.end(),
+                    [&entry_id](const auto& e) {
+                        return e.contains("id") && e["id"] == entry_id;
+                    });
+
+                if (existing == current_entries.end()) {
+                    // This is a new entry that was received while acting as server
+                    vault_updated = true;
+                    break;
+                }
+            }
+
+            if (vault_updated || final_entries.size() != current_entries.size()) {
+                // Replace vault entries with synced version
+                vault.set_all_entries(final_entries);
+                if (vault.save_vault()) {
+                    std::cout << "\n✓ Vault updated with synced entries\n";
+                }
+            }
+        }
 
         // Display results
         std::cout << "\n═══ Sync Results ═══\n\n";
