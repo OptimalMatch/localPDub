@@ -594,11 +594,13 @@ private:
         sync::SyncManager sync_server(vault_path.string());
         // Passphrase will be set later if authentication is chosen
 
-        if (!sync_server.start_sync_server(51820)) {
+        int sync_server_port = 51820;
+        if (!sync_server.start_sync_server(sync_server_port)) {
             // Try fallback ports if primary port is in use
             bool server_started = false;
             for (int port = 51821; port <= 51829; port++) {
                 if (sync_server.start_sync_server(port)) {
+                    sync_server_port = port;
                     server_started = true;
                     break;
                 }
@@ -609,6 +611,7 @@ private:
                 return;
             }
         }
+        std::cout << "Sync server started on port " << sync_server_port << "\n";
 
         // Start discovery
         std::cout << "Starting device discovery...\n";
@@ -616,6 +619,7 @@ private:
 
         sync::NetworkDiscoveryManager discovery;
         discovery.set_timeout(std::chrono::seconds(60)); // 1 minute timeout
+        discovery.set_sync_port(sync_server_port);  // Tell discovery which port our sync server is on
 
         if (!discovery.start_session(device_name, vault_id)) {
             std::cout << "❌ Failed to start discovery session.\n";

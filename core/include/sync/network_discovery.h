@@ -50,6 +50,9 @@ public:
     // Set discovery timeout (default 5 minutes)
     void set_timeout(std::chrono::seconds timeout);
 
+    // Set sync server port (the TCP port we're listening on for sync connections)
+    void set_sync_port(int port);
+
 private:
     // Network operations
     bool bind_to_port(int start_port, int end_port);
@@ -64,7 +67,8 @@ private:
     std::unique_ptr<std::thread> listener_thread_;
 
     // Network state
-    int bound_port_;
+    int bound_port_;           // UDP discovery port
+    int sync_server_port_;     // TCP sync server port
     int broadcast_socket_;
     int listener_socket_;
 

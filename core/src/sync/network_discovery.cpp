@@ -15,6 +15,7 @@ namespace sync {
 NetworkDiscoveryManager::NetworkDiscoveryManager()
     : active_(false)
     , bound_port_(-1)
+    , sync_server_port_(51820)  // Default sync port
     , broadcast_socket_(-1)
     , listener_socket_(-1)
     , timeout_(std::chrono::seconds(300)) {
@@ -225,7 +226,7 @@ json NetworkDiscoveryManager::create_announce_message() const {
         {"device", {
             {"id", device_id_},
             {"name", device_name_},
-            {"port", bound_port_},
+            {"port", sync_server_port_},  // Announce the TCP sync port, not UDP discovery port
             {"vault_id", vault_id_},
             {"last_modified", timestamp.str()}
         }},
@@ -319,6 +320,10 @@ bool NetworkDiscoveryManager::is_active() const {
 
 void NetworkDiscoveryManager::set_timeout(std::chrono::seconds timeout) {
     timeout_ = timeout;
+}
+
+void NetworkDiscoveryManager::set_sync_port(int port) {
+    sync_server_port_ = port;
 }
 
 } // namespace sync
