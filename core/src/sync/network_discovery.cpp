@@ -63,7 +63,8 @@ bool NetworkDiscoveryManager::start_session(const std::string& device_name, cons
             // Check timeout
             auto now = std::chrono::system_clock::now();
             if (now - session_start_time_ > timeout_) {
-                stop_session();
+                // Don't call stop_session from within the thread - just set active to false
+                active_ = false;
                 break;
             }
         }
