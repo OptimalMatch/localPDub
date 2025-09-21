@@ -515,30 +515,28 @@ private:
         if (length < 8) length = 8;
         if (length > 128) length = 128;
 
-        std::cout << "Include uppercase? (y/n): ";
-        char upper;
-        std::cin >> upper;
+        std::cout << "Include uppercase? [Y/n]: ";
+        std::string upper;
+        std::getline(std::cin, upper);
 
-        std::cout << "Include lowercase? (y/n): ";
-        char lower;
-        std::cin >> lower;
+        std::cout << "Include lowercase? [Y/n]: ";
+        std::string lower;
+        std::getline(std::cin, lower);
 
-        std::cout << "Include numbers? (y/n): ";
-        char numbers;
-        std::cin >> numbers;
+        std::cout << "Include numbers? [Y/n]: ";
+        std::string numbers;
+        std::getline(std::cin, numbers);
 
-        std::cout << "Include symbols? (y/n): ";
-        char symbols;
-        std::cin >> symbols;
-
-        std::cin.ignore();
+        std::cout << "Include symbols? [Y/n]: ";
+        std::string symbols;
+        std::getline(std::cin, symbols);
 
         std::string password = generate_password(
             length,
-            upper == 'y' || upper == 'Y',
-            lower == 'y' || lower == 'Y',
-            numbers == 'y' || numbers == 'Y',
-            symbols == 'y' || symbols == 'Y'
+            upper.empty() || upper[0] == 'y' || upper[0] == 'Y',
+            lower.empty() || lower[0] == 'y' || lower[0] == 'Y',
+            numbers.empty() || numbers[0] == 'y' || numbers[0] == 'Y',
+            symbols.empty() || symbols[0] == 'y' || symbols[0] == 'Y'
         );
 
         std::cout << "\nGenerated password: " << password << "\n";
@@ -778,10 +776,16 @@ private:
     }
 
     void exit_without_saving() {
-        std::cout << "Are you sure you want to exit without saving? (y/n): ";
-        char confirm;
-        std::cin >> confirm;
-        if (confirm == 'y' || confirm == 'Y') {
+        std::cout << ui::AnsiUI::color(ui::ansi::BRIGHT_YELLOW)
+                  << "Are you sure you want to exit without saving? [Y/n]: "
+                  << ui::AnsiUI::color(ui::ansi::RESET);
+
+        std::string confirm;
+        std::getline(std::cin, confirm);
+
+        // Default to 'Y' if user just presses Enter
+        if (confirm.empty() || confirm[0] == 'y' || confirm[0] == 'Y') {
+            std::cout << ui::AnsiUI::warning("Exiting without saving...") << "\n";
             vault.close_vault();
             running = false;
         }
